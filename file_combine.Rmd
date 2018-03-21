@@ -65,34 +65,34 @@ myfiles <- lapply(paste(path,'/',list_csv,sep=''),function(x)read.csv(x,header =
 files <- mapply(cbind,myfiles,'filename' = list_csv,SIMPLIFY = F)
 
 ## bind all the elements of the list together.
-I_94_EB <- bind_rows(files)
+I_94_EB_TT <- bind_rows(files)
 
 ## we need to get rid of the symbol in the station name column and turn it to NA.
-symbol <- I_94_EB$V1[4]
+symbol <- I_94_EB_TT$V1[4]
 
-I_94_EB$V1[I_94_EB$V1==symbol] <- NA
+I_94_EB_TT$V1[I_94_EB_TT$V1==symbol] <- NA
 ```
 
 We now clean the dataset and assign appropriate column names. 
 
 ```{r fix_colnames_add_fields}
-I_94_EB <- x
+I_94_EB_TT <- x
 
 ### Give the dataset the column name from the first row. This is only temporary.
-colnames(I_94_EB) <- I_94_EB[1,]
-colnames(I_94_EB)[1] <- "STN_Name"
-colnames(I_94_EB)[292] <- 'filename'
-colnames(I_94_EB) <-trimws(colnames(I_94_EB))
+colnames(I_94_EB_TT) <- I_94_EB_TT[1,]
+colnames(I_94_EB_TT)[1] <- "STN_Name"
+colnames(I_94_EB_TT)[292] <- 'filename'
+colnames(I_94_EB_TT) <-trimws(colnames(I_94_EB_TT))
 
 
 ##remove the first row as it has now been transferred to the column names. 
-I_94_EB <- I_94_EB[-1,]
+I_94_EB_TT <- I_94_EB_TT[-1,]
 
 ## use dplyr piping to:
-I_94_EB <-  I_94_EB %>%
+I_94_EB_TT <-  I_94_EB_TT %>%
   
   ##remove all of the headers that were read in orginially
-  filter(I_94_EB$`Accumulated Distance` != " Accumulated Distance")%>%
+  filter(I_94_EB_TT$`Accumulated Distance` != " Accumulated Distance")%>%
   
   ##Create new fields:
   ###fill in the blank rows with the previous name
@@ -113,8 +113,8 @@ I_94_EB <-  I_94_EB %>%
 The dataset is still in the wide format:
 
 ```{r check_data_for_header_filter}
-head(I_94_EB[1:5,1:10])
-table(I_94_EB$`Accumulated Distance` == "Accumulated Distance")
+head(I_94_EB_TT[1:5,1:10])
+table(I_94_EB_TT$`Accumulated Distance` == "Accumulated Distance")
 ```
 
 Lets turn get a Time and Travel Time field effectively turning the dataset into the 'long format'. 
@@ -122,12 +122,12 @@ Lets turn get a Time and Travel Time field effectively turning the dataset into 
 The melt function from reshape2 works well for this purpose.
 
 ```{r melt_I94_EB}
-I_94_EB_melt <- melt(I_94_EB,id.vars = c(1:8),variable.name = "Time",value.name = 'TT')
-head(I_94_EB_melt)
+I_94_EB_TT_melt <- melt(I_94_EB_TT,id.vars = c(1:8),variable.name = "Time",value.name = 'TT')
+head(I_94_EB_TT_melt)
 ```
 
 ```{r add_DateTime_I-94_EB}
-I_94_EB_melt <-  I_94_EB_melt %>%
+I_94_EB_TT_melt <-  I_94_EB_TT_melt %>%
   
   ##we create a true datetime by merging the first day in the filename with the time from the column header.
   ##we make ensure it is a POSIX datetime format. 
@@ -140,10 +140,10 @@ I_94_EB_melt <-  I_94_EB_melt %>%
 ```{r drop_fields}
 
 ##drop the no longer needed columns.
-I_94_EB_melt <- I_94_EB_melt %>% select(-c(Average,Time)) 
+I_94_EB_TT_melt <- I_94_EB_TT_melt %>% select(-c(Average,Time)) 
 
 ##show the top of the dataset.
-head(I_94_EB_melt)[1:5,1:length(I_94_EB_melt)]  
+head(I_94_EB_TT_melt)[1:5,1:length(I_94_EB_TT_melt)]  
 
 
 ```
@@ -166,16 +166,16 @@ We now join the Measure_Round value from the Linear Referenced Dataset in ArcMap
 
 ```{r join_Measure_round}
 
-##perform a join on our I_94_EB_melt dataset with the Station table to get the Measure values for each station. 
-I_94_EB_melt <- merge(I_94_EB_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
+##perform a join on our I_94_EB_TT_melt dataset with the Station table to get the Measure values for each station. 
+I_94_EB_TT_melt <- merge(I_94_EB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
 
 ##look at the top of the merged dataset
-head(I_94_EB_melt,n=50)
+head(I_94_EB_TT_melt,n=50)
 
-tail(I_94_EB_melt,n=15)
+tail(I_94_EB_TT_melt,n=15)
 
 ##check if there were any location with no matches
-print(table(is.na(I_94_EB_melt$Measure)))
+print(table(is.na(I_94_EB_TT_melt$Measure)))
 
 ```
 
@@ -617,18 +617,22 @@ MNCMAT_final <- MNCMAT %>%
 
 Create a duration for each incident.
 
-A: 15 mins
-B: 30 mins
-C: 1 hour
-N: 2 hour
-K: 4 hour
+K: Fatal                      180 mins
+A: Incapacitating Injury      90 mins
+B: Non-Incapacitating Injury  45 mins
+C: Possible Injury            30 mins
+N: Property Damage            30 mins
+X: Unknown                    30 mins
+
 
 ```{r assign_duration}
-MNCMAT_final$EndDateTime <- if_else(MNCMAT_final$Sev == 'A',MNCMAT_final$DateTime+15*60,
-                             if_else(MNCMAT_final$Sev == 'B',MNCMAT_final$DateTime+30*60,
-                             if_else(MNCMAT_final$Sev == 'C',MNCMAT_final$DateTime+60*60,
-                             if_else(MNCMAT_final$Sev == 'N',MNCMAT_final$DateTime+120*60,
-                             if_else(MNCMAT_final$Sev == 'K',MNCMAT_final$DateTime+240*60,MNCMAT_final$DateTime)))))
+MNCMAT_final$EndDateTime <- if_else(MNCMAT_final$Sev == 'A',MNCMAT_final$DateTime+90*60,
+                             if_else(MNCMAT_final$Sev == 'B',MNCMAT_final$DateTime+45*60,
+                             if_else(MNCMAT_final$Sev == 'C',MNCMAT_final$DateTime+30*60,
+                             if_else(MNCMAT_final$Sev == 'N',MNCMAT_final$DateTime+30*60,
+                             if_else(MNCMAT_final$Sev == 'K',MNCMAT_final$DateTime+180*60,
+                              if_else(MNCMAT_final$Sev == 'X',MNCMAT_final$DateTime+30*60,
+                                     MNCMAT_final$DateTime))))))
 
 MNCMAT_final$interval <- interval(MNCMAT_final$DateTime,MNCMAT_final$EndDateTime)
 
@@ -688,11 +692,23 @@ head(IRIS_2015_event)
 We now have a start and end time, Direction and Road for each event.
 
 
-###Filter Combine
+##Filter Combine
 
-```{r filtering_final}
+```{r}
+##load segment data
+fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
+Seg <- as.data.frame(readOGR(dsn=fgdb,layer="Segments"))
+print(Seg)
+```
 
-test <- I_94_EB_melt %>% filter(Measure_Round==227.08 & !is.na(STN_Name))
+
+
+### S_3
+
+
+```{r S_3}
+
+S_3 <- I_94_EB_melt %>% filter(Measure_Round>=225.63 & !is.na(STN_Name))
 
 final_15 <-  merge(test,seq_15min_2015,by='DateTime',all.y=TRUE)%>%
   select(DateTime,TT,Measure_Round,STN_ID,STN_Name)
