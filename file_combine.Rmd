@@ -12,6 +12,7 @@ library(gridExtra)
 library(reshape2)
 library(zoo)
 library(rgdal)
+
 ```
 
 
@@ -24,19 +25,20 @@ data.frame(file.info(dir()))
 
 ## Travel Time
 
-###I-94 Eastbound
+###I-94 Eastbound Travel Time
 
 We will focus on the Travel Time data for I_94 EB first. 
 
+
 To load the Travel Time Data we first check that the files are present in the relevant folder. There are `r length(dir('./TICAS/I-94 EB'))` located in "./TICAS/I-94 EB".
 
-```{r Top_10_Files_dir}
+```{r I_94_EB_TT Top_10_Files_dir}
 dir('./TICAS/I-94 EB')[1:10]
 ```
 
 Investigate the data structure of each TT File. Each file is for a specific day, with the file name giving the actual day. 
 
-```{r sample_TT_data}
+```{r I_94_EB_TT sample_TT_data}
 head(read.csv('./TICAS/I-94 EB/TT_201501010000-201501020000.csv')[1:5,1:5])
 ```
 
@@ -49,7 +51,7 @@ We will also fill down each row name to ensure that there are no blank station n
 
 We will load the data into R and combine into one dataset. 
 
-```{r read_TT_files_bind,warning=FALSE}
+```{r I_94_EB_TT read_TT_files_bind,warning=FALSE}
 ### set the path for the I-94 EB data.
 path<-'./TICAS/I-94 EB'
 
@@ -75,8 +77,8 @@ I_94_EB_TT$V1[I_94_EB_TT$V1==symbol] <- NA
 
 We now clean the dataset and assign appropriate column names. 
 
-```{r fix_colnames_add_fields}
-I_94_EB_TT <- x
+```{r I_94_EB_TT fix_colnames_add_fields}
+###I_94_EB_TT <- x
 
 ### Give the dataset the column name from the first row. This is only temporary.
 colnames(I_94_EB_TT) <- I_94_EB_TT[1,]
@@ -112,7 +114,7 @@ I_94_EB_TT <-  I_94_EB_TT %>%
 
 The dataset is still in the wide format:
 
-```{r check_data_for_header_filter}
+```{r I_94_EB_TT check_data_for_header_filter}
 head(I_94_EB_TT[1:5,1:10])
 table(I_94_EB_TT$`Accumulated Distance` == "Accumulated Distance")
 ```
@@ -121,12 +123,13 @@ Lets turn get a Time and Travel Time field effectively turning the dataset into 
 
 The melt function from reshape2 works well for this purpose.
 
-```{r melt_I94_EB}
+```{r I_94_EB_TT melt_I94_EB}
 I_94_EB_TT_melt <- melt(I_94_EB_TT,id.vars = c(1:8),variable.name = "Time",value.name = 'TT')
 head(I_94_EB_TT_melt)
 ```
 
-```{r add_DateTime_I-94_EB}
+
+```{r I_94_EB_TT add_DateTime_I-94_EB}
 I_94_EB_TT_melt <-  I_94_EB_TT_melt %>%
   
   ##we create a true datetime by merging the first day in the filename with the time from the column header.
@@ -137,10 +140,11 @@ I_94_EB_TT_melt <-  I_94_EB_TT_melt %>%
   
 ```
 
-```{r drop_fields}
+```{r I_94_EB_TT drop_fields}
 
 ##drop the no longer needed columns.
-I_94_EB_TT_melt <- I_94_EB_TT_melt %>% select(-c(Average,Time)) 
+I_94_EB_TT_melt <- I_94_EB_TT_melt %>%
+  select(-c(Average,Time))
 
 ##show the top of the dataset.
 head(I_94_EB_TT_melt)[1:5,1:length(I_94_EB_TT_melt)]  
@@ -150,7 +154,7 @@ head(I_94_EB_TT_melt)[1:5,1:length(I_94_EB_TT_melt)]
 
 Load in the linear referenced Station values from the FileGeodatabase. The File Geodatabase is currently located on C Drive due to locking issue with File Geodatabases stored on the Network Drive. We will need the milepost for each station. We are importing the entire Station list and some will not have measure values. 
 
-```{r connect_geodb_read_station}
+```{r I_94_EB_TT connect_geodb_read_station}
 fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
 Station <- as.data.frame(readOGR(dsn=fgdb,layer="Station"))
 
@@ -164,7 +168,7 @@ colnames(Station)
 
 We now join the Measure_Round value from the Linear Referenced Dataset in ArcMap to each station in our current dataset.
 
-```{r join_Measure_round}
+```{r I_94_EB_TT join_Measure_round}
 
 ##perform a join on our I_94_EB_TT_melt dataset with the Station table to get the Measure values for each station. 
 I_94_EB_TT_melt <- merge(I_94_EB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
@@ -188,7 +192,7 @@ The Measure field has alot of significant digits. The Measure_Round field is the
 We will focus on the Travel Time data for I_94 WB.
 
 
-```{r read_bind,warning=FALSE,echo=FALSE,include=FALSE}
+```{r I_94_WB_TT  read_bind,warning=FALSE,echo=FALSE,include=FALSE}
 ### set the path for the I-94 EB data.
 path<-'./TICAS/I-94 WB'
 
@@ -216,7 +220,7 @@ x <- I_94_WB_TT
 
 We now clean the dataset and assign appropriate column names. 
 
-```{r clean_mutate}
+```{r I_94_WB_TT  clean_mutate}
 ###I_94_WB_TT <- x
 
 ### Give the dataset the column name from the first row. This is only temporary.
@@ -253,7 +257,7 @@ I_94_WB_TT <-  I_94_WB_TT %>%
 
 The dataset is still in the wide format:
 
-```{r check_dataset}
+```{r I_94_WB_TT  check_dataset}
 
 head(I_94_WB_TT[1:5,1:10])
 table(I_94_WB_TT$`Accumulated Distance` == "Accumulated Distance")
@@ -263,12 +267,12 @@ Lets turn get a Time and Travel Time field effectively turning the dataset into 
 
 The melt function from reshape2 works well for this purpose.
 
-```{r melt_I94_WB}
+```{r melt_I94_WB_TT}
 I_94_WB_TT_melt <- melt(I_94_WB_TT,id.vars = c(1:8),variable.name = "Time",value.name = 'TT')
 head(I_94_WB_TT_melt)
 ```
 
-```{r add_DateTime}
+```{r I_94_WB_TT add_DateTime}
 I_94_WB_TT_melt <-  I_94_WB_TT_melt %>%
   
   ##we create a true datetime by merging the first day in the filename with the time from the column header.
@@ -279,7 +283,7 @@ I_94_WB_TT_melt <-  I_94_WB_TT_melt %>%
   
 ```
 
-```{r remove_unneeded_fields}
+```{r I_94_WB_TT remove_unneeded_fields}
 
 ##drop the no longer needed columns.
 I_94_WB_TT_melt <- I_94_WB_TT_melt %>% select(-c(Average,Time)) 
@@ -293,7 +297,7 @@ head(I_94_WB_TT_melt)[1:5,1:length(I_94_WB_TT_melt)]
 Load in the linear referenced Station values from the FileGeodatabase. The File Geodatabase is currently located on C Drive due to locking issue with File Geodatabases stored on the Network Drive. We will need the milepost for each station. We are importing the entire Station list and some will not have measure values. 
 
 
-```{r join_Measure_round}
+```{r I_94_WB_TT join_Measure_round}
 
 ##perform a join on our I_94_WB_TT_melt dataset with the Station table to get the Measure values for each station. 
 I_94_WB_TT_melt <- merge(I_94_WB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
@@ -312,10 +316,13 @@ The Measure field has alot of significant digits. The Measure_Round field is the
 
 
 
-##VMT I-94 Westbound
+
+## VMT
+
+###VMT I-94 Westbound
 
 
-```{r read_VMT_bind,warning=FALSE,echo=FALSE,include=FALSE}
+```{r I_94_WB_VMT read_VMT_bind,warning=FALSE,echo=FALSE,include=FALSE}
 ### set the path for the I-94 EB data.
 path<-'./TICAS/I-94 WB'
 
@@ -343,8 +350,8 @@ x <- I_94_WB_VMT
 
 We now clean the dataset and assign appropriate column names. 
 
-```{r clean_mutate}
-I_94_WB_VMT <- x
+```{r I_94_WB_VMT  clean_mutate}
+##I_94_WB_VMT <- x
 
 ### Give the dataset the column name from the first row. This is only temporary.
 colnames(I_94_WB_VMT) <- I_94_WB_VMT[1,]
@@ -382,7 +389,7 @@ I_94_WB_VMT <-  I_94_WB_VMT %>%
 
 The dataset is still in the wide format:
 
-```{r check_dataset}
+```{r I_94_WB_VMT check_dataset}
 
 head(I_94_WB_VMT[1:5,1:10])
 table(I_94_WB_VMT$`Accumulated Distance` == "Accumulated Distance")
@@ -392,12 +399,12 @@ Lets turn get a Time and Travel Time field effectively turning the dataset into 
 
 The melt function from reshape2 works well for this purpose.
 
-```{r melt_I94_WB}
+```{r I_94_WB_VMT melt_I94_WB}
 I_94_WB_VMT_melt <- melt(I_94_WB_VMT,id.vars = c(1:7),variable.name = "Time",value.name = 'VMT')
 head(I_94_WB_VMT_melt)
 ```
 
-```{r add_DateTime}
+```{r I_94_WB_VMT add_DateTime}
 I_94_WB_VMT_melt <-  I_94_WB_VMT_melt %>%
   
   ##we create a true datetime by merging the first day in the filename with the time from the column header.
@@ -408,7 +415,7 @@ I_94_WB_VMT_melt <-  I_94_WB_VMT_melt %>%
   
 ```
 
-```{r remove_unneeded_fields}
+```{r I_94_WB_VMT remove_unneeded_fields}
 
 ##drop the no longer needed columns.
 I_94_WB_VMT_melt <- I_94_WB_VMT_melt %>% select(-Time) 
@@ -422,7 +429,7 @@ head(I_94_WB_VMT_melt)[1:5,1:length(I_94_WB_VMT_melt)]
 Load in the linear referenced Station values from the FileGeodatabase. The File Geodatabase is currently located on C Drive due to locking issue with File Geodatabases stored on the Network Drive. We will need the milepost for each station. We are importing the entire Station list and some will not have measure values. 
 
 
-```{r join_Measure_round}
+```{r I_94_WB_VMT join_Measure_round}
 
 ##perform a join on our I_94_WB_VMT_melt dataset with the Station table to get the Measure values for each station. 
 I_94_WB_VMT_melt <- merge(I_94_WB_VMT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
@@ -441,10 +448,10 @@ The Measure field has alot of significant digits. The Measure_Round field is the
 
 
 
-##VMT I-94 Eastbound
+###VMT I-94 Eastbound
 
 
-```{r read_VMT_bind,warning=FALSE,echo=FALSE,include=FALSE}
+```{r I_94_EB_VMT read_VMT_bind,warning=FALSE,echo=FALSE,include=FALSE}
 ### set the path for the I-94 EB data.
 path<-'./TICAS/I-94 EB'
 
@@ -472,7 +479,7 @@ x <- I_94_EB_VMT
 
 We now clean the dataset and assign appropriate column names. 
 
-```{r clean_mutate}
+```{r I_94_EB_VMT clean_mutate}
 ###I_94_EB_VMT <- x
 
 ### Give the dataset the column name from the first row. This is only temporary.
@@ -503,15 +510,12 @@ I_94_EB_VMT <-  I_94_EB_VMT %>%
   select(Name,STN,STN_Name,STN_ID,Lane,filename,everything())%>%
   ##remove total row
   filter(!grepl('Total',Name))
-  
-  
-  
 
 ```
 
 The dataset is still in the wide format:
 
-```{r check_dataset}
+```{r I_94_EB_VMT check_dataset}
 
 head(I_94_EB_VMT[1:5,1:10])
 table(I_94_EB_VMT$`Accumulated Distance` == "Accumulated Distance")
@@ -521,12 +525,12 @@ Lets turn get a Time and Travel Time field effectively turning the dataset into 
 
 The melt function from reshape2 works well for this purpose.
 
-```{r melt_I94_WB}
+```{r I_94_EB_VMT melt_I94_WB}
 I_94_EB_VMT_melt <- melt(I_94_EB_VMT,id.vars = c(1:7),variable.name = "Time",value.name = 'VMT')
 head(I_94_EB_VMT_melt)
 ```
 
-```{r add_DateTime}
+```{r I_94_EB_VMT add_DateTime}
 I_94_EB_VMT_melt <-  I_94_EB_VMT_melt %>%
   
   ##we create a true datetime by merging the first day in the filename with the time from the column header.
@@ -537,7 +541,7 @@ I_94_EB_VMT_melt <-  I_94_EB_VMT_melt %>%
   
 ```
 
-```{r remove_unneeded_fields}
+```{r I_94_EB_VMT remove_unneeded_fields}
 
 ##drop the no longer needed columns.
 I_94_EB_VMT_melt <- I_94_EB_VMT_melt %>% select(-Time) 
@@ -551,7 +555,7 @@ head(I_94_EB_VMT_melt)[1:5,1:length(I_94_EB_VMT_melt)]
 Load in the linear referenced Station values from the FileGeodatabase. The File Geodatabase is currently located on C Drive due to locking issue with File Geodatabases stored on the Network Drive. We will need the milepost for each station. We are importing the entire Station list and some will not have measure values. 
 
 
-```{r join_Measure_round}
+```{r I_94_EB_VMT join_Measure_round}
 
 ##perform a join on our I_94_EB_VMT_melt dataset with the Station table to get the Measure values for each station. 
 I_94_EB_VMT_melt <- merge(I_94_EB_VMT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
@@ -584,7 +588,7 @@ Create a date time field by combined the Month, Day, Year and Time fields.
 
 ```{r create_DateTime}
 
-MNCMAT$Time <- if_else(MNCMAT$Time<60,paste('00',MNCMAT$Time,sep = ''),as.character(MNCMAT$Time))
+MNCMAT$Time <- if_else(MNCMAT$Time<60,paste('00',MNCMAT$Time,sep = ''),if_else(MNCMAT$Time<10,paste('000',MNCMAT$Time,sep = ''),as.character(MNCMAT$Time)))
 
 MNCMAT$DateTime <- as.POSIXct(paste(MNCMAT$Year,'/',
                                     MNCMAT$Month,'/',
@@ -605,7 +609,7 @@ MNCMAT[is.na(MNCMAT$DateTime),c("Month","Day","Time","Year","DateTime")]
 ```
 
 The Time values of 9998 are clearly in error and we will omit these records. 
-We will also filter out the values with no Measure value. 
+We will also filter out the values with no Measure value. These values are not in the scope of this project. 
 
 ```{r remove_NAs}
 MNCMAT_final <- MNCMAT %>% 
@@ -640,7 +644,7 @@ head(MNCMAT_final)
 ```
 
 
-### Crash Data IRIS
+## Crash Data IRIS
 
 ```{r read_IRIS_dataset_from_ARCMAP}
 fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
@@ -649,7 +653,7 @@ IRIS_2015 <- as.data.frame(readOGR(dsn=fgdb,layer="IRIS_2015"))
 
 Create a DateTime field.
 
-```{r}
+```{r IRIS create_DateTime}
 
 IRIS_2015$DateTime <- as.POSIXct(IRIS_2015$event_date,format='%Y-%m-%d %H:%M:%S')
 
@@ -658,19 +662,19 @@ table(is.na(IRIS_2015$DateTime))
 
 Investigate the NA DateTime value.
 
-```{r look_at_NA}
+```{r IRIS look_at_NA}
 IRIS_2015[is.na(IRIS_2015$DateTime),]
 ```
 
 The row appears to be blank so will remove the record.
 
-```{r remove_NA}
+```{r IRIS remove_NA}
 IRIS_2015 <- IRIS_2015[!is.na(IRIS_2015$DateTime),]
 ```
 
 We will group by event_id and return the min and max time. This will provide us with the interval for each incident. 
 
-```{r}
+```{r aggregate_by_event_name}
 
 IRIS_2015_event <- IRIS_2015 %>% 
   group_by(name)%>%
@@ -684,36 +688,167 @@ IRIS_2015_event <- IRIS_2015 %>%
   ##tibble (dplyr dataframe type) do not like storing interval column.
   as.data.frame()
 
-IRIS_2015_event$interval <-  interval(IRIS_2015_event$Min_DateTime,IRIS_2015_event$Max_DateTime)
 
 head(IRIS_2015_event)
+table(IRIS_2015_event$Road %>% droplevels())
+table(IRIS_2015_event$Direction %>% droplevels())
 ```
 
 We now have a start and end time, Direction and Road for each event.
 
 
-##Filter Combine
+##Weather 2015
+
+Read the already processed weather data.
 
 ```{r}
+
+weather_MSP <- as.data.frame(readxl::read_xlsx('./Weather/MSP_Weather_2015.xlsx',sheet = 'export3_2015'))
+colnames(weather_MSP) <- trimws(colnames(weather_MSP))
+colnames(weather_MSP) <- gsub('([[:punct:]])|\\s+','_',colnames(weather_MSP))
+
+###read::xlsx brings in time in UTC. change to us/central
+weather_MSP$Starting_Time <- as.POSIXct(format(weather_MSP$Starting_Time),tz='US/Central')
+weather_MSP$End_Time <- as.POSIXct(format(weather_MSP$End_Time),tz='US/Central')
+```
+
+
+
+##Filter Combine Segments
+
+```{r load_segments}
 ##load segment data
 fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
 Seg <- as.data.frame(readOGR(dsn=fgdb,layer="Segments"))
 print(Seg)
 ```
 
+###TT and VMT aggregating functions
+
+```{r TT_filter}
+
+TT <- function(data,Station_MP,bins){
+  data%>%
+  filter(Measure_Round==Station_MP)%>%
+  filter(!is.na(DateTime))%>%
+  mutate(cut_ceiling=ceiling_date(DateTime,bins),
+         cut_floor=floor_date(DateTime,bins))%>%
+  group_by(cut_ceiling)%>%
+  summarise(TT_mean=mean(as.numeric(TT)),
+            cut_floor=min(cut_floor))%>%
+  as.data.frame()
+}
+  
+```
+
+```{r VMT_filter}
+
+VMT <- function(data, from, to, bins){
+  data %>%
+  filter(Measure_Round >= from & Measure_Round <= to)%>%
+  filter(!is.na(DateTime))%>%
+  mutate(cut_ceiling=ceiling_date(DateTime,bins),
+         cut_floor=floor_date(DateTime,bins))%>%
+  group_by(cut_ceiling)%>%
+  summarise(VMT_total = sum(as.numeric(VMT)),
+            cut_floor=min(cut_floor))%>%
+  as.data.frame()
+}
+```
+
+```{r 15_minute_seq_2015}
+
+seq_15min_2015 <- data.frame(DateTime=seq(as.POSIXct("2015,01,01",format="%Y,%m,%d"),
+                                          as.POSIXct("2016,01,01",format="%Y,%m,%d"),by="15 min"))
+```
 
 
-### S_3
+### S_3 I-94_EastBound MP 225.63 - MP 228.52
 
+Filter both the TT and VMT datasets
 
 ```{r S_3}
+S_3_VMT <- VMT(I_94_EB_VMT_melt,225.63,228.52,'15 mins')
+S_3_TT <- TT(I_94_EB_TT_melt,228.52,'15 mins')
 
-S_3 <- I_94_EB_melt %>% filter(Measure_Round>=225.63 & !is.na(STN_Name))
+S_3_merge <- merge(seq_15min_2015,S_3_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
+S_3_merge <- merge(S_3_merge,S_3_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
+```
 
-final_15 <-  merge(test,seq_15min_2015,by='DateTime',all.y=TRUE)%>%
-  select(DateTime,TT,Measure_Round,STN_ID,STN_Name)
+```{r S_3_MNCMAT}
+S_3_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=225.63 &Measure_Round<=228.52 & Direction =='94E') %>% as.data.frame()
 
-final_15$crash <- sapply(final_15$DateTime, function(x) any(x %within% MNCMAT_final$interval))
+S_3_merge$crash1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_MNCMAT$EndDateTime & x > S_3_MNCMAT$DateTime))
+S_3_merge$crash2 <- sapply(S_3_merge$cut_floor.x, function(x) any(x < S_3_MNCMAT$EndDateTime & x > S_3_MNCMAT$DateTime))
+S_3_merge$MNCMAT <- ifelse(S_3_merge$crash1==TRUE | S_3_merge$crash2==TRUE,TRUE,FALSE)
+```
 
+```{r S_3_IRIS}
+S_3_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=225.63 & Measure_Round<=228.52 & Direction == ' EB')
+
+S_3_merge$IRIS1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_IRIS$Max_DateTime & x > S_3_IRIS$Min_DateTime))
+S_3_merge$IRIS2 <- sapply(S_3_merge$cut_floor.x, function(x) any(x < S_3_IRIS$Max_DateTime & x > S_3_IRIS$Min_DateTime))
+S_3_merge$IRIS <- ifelse(S_3_merge$IRIS1==TRUE | S_3_merge$IRIS2==TRUE,TRUE,FALSE) 
+  
+```
+
+```{r S_3_Weather}
+S_3_merge$weather1 <- sapply(S_3_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
+                                                                   x > weather_MSP$Starting_Time))
+S_3_merge$weather2 <- sapply(S_3_merge$cut_floor.x, function(x) any(x < weather_MSP$End_Time & 
+                                                                      x > weather_MSP$Starting_Time))
+S_3_merge$weather <- ifelse(S_3_merge$weather2==TRUE | S_3_merge$weather1==TRUE,TRUE,FALSE) 
+```
+
+
+
+
+###Summary for TT and VMT
+
+```{r TT_summary_function}
+
+TT_summary <- function(data,name){
+  x <- data %>%
+  group_by(filename)%>%
+  mutate(TT_num = as.numeric(TT))%>%
+  summarise(Min=min(TT_num),
+            Max=max(TT_num),
+            Mean=mean(TT_num),
+            Median=median(TT_num),
+            SD=sd(TT_num),
+            below_0_percent = sum(TT_num<0)/length(TT_num))
+            
+  
+  write.csv(x,name)
+  print(x)
+}
+```
+
+```{r TT_summaries}
+TT_summary(I_94_EB_TT_melt,"I_94_EB_TT_summary.csv")
+TT_summary(I_94_WB_TT_melt,"I_94_WB_TT_summary.csv")
+```
+
+```{r VMT_summary_function}
+VMT_summary <- function(data,name){
+  x <- data %>%
+  group_by(filename)%>%
+  mutate(VMT_num = as.numeric(VMT))%>%
+  summarise(Min=min(VMT_num),
+            Max=max(VMT_num),
+            Mean=mean(VMT_num),
+            Median=median(VMT_num),
+            SD=sd(VMT_num),
+            below_0_percent = sum(VMT_num<0)/length(VMT_num))
+  
+  write.csv(x,name)
+  print(x)
+}
 
 ```
+
+```{r VMT_summaries}
+VMT_summary(I_94_EB_VMT_melt,"I_94_EB_VMT_summary.csv")
+VMT_summary(I_94_WB_VMT_melt,"I_94_WB_VMT_summary.csv")
+```
+
