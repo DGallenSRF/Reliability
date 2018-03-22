@@ -800,6 +800,10 @@ S_3_merge$weather2 <- sapply(S_3_merge$cut_floor.x, function(x) any(x < weather_
 S_3_merge$weather <- ifelse(S_3_merge$weather2==TRUE | S_3_merge$weather1==TRUE,TRUE,FALSE) 
 ```
 
+```{r S_3_final}
+S_3_final <- S_3_merge %>% select(DateTime,TT_mean,VMT_total,IRIS,crash,weather)
+```
+
 
 
 
