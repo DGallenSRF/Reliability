@@ -763,6 +763,63 @@ seq_15min_2015 <- data.frame(DateTime=seq(as.POSIXct("2015,01,01",format="%Y,%m,
 ```
 
 
+### N_1 I-94_WestBound MP 230.69 - MP 228.51
+
+Filter both the TT and VMT datasets
+
+```{r N_1}
+N_1_VMT <- VMT(I_94_WB_VMT_melt,228.51,230.69,'15 mins')
+N_1_TT <- TT(I_94_WB_TT_melt,230.69,'15 mins')
+
+N_1_merge <- merge(seq_15min_2015,N_1_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
+N_1_merge <- merge(N_1_merge,N_1_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
+```
+
+
+Does the 15 minute time bin coincide with any MNCMAT events?
+
+```{r N_1_MNCMAT}
+N_1_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=225.63 &Measure_Round<=228.51 & Direction =='94W') %>% as.data.frame()
+
+N_1_merge$crash1 <- sapply(N_1_merge$DateTime, function(x) any(x < N_1_MNCMAT$EndDateTime & x > N_1_MNCMAT$DateTime))
+N_1_merge$crash2 <- sapply(N_1_merge$cut_floor.x, function(x) any(x < N_1_MNCMAT$EndDateTime & x > N_1_MNCMAT$DateTime))
+N_1_merge$MNCMAT <- ifelse(N_1_merge$crash1==TRUE | N_1_merge$crash2==TRUE,TRUE,FALSE)
+```
+
+Does the 15 minute time bin coincide with any IRIS events?
+
+```{r N_1_IRIS}
+N_1_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=225.63 &Measure_Round<=228.51 & Direction == ' WB')
+
+N_1_merge$IRIS1 <- sapply(N_1_merge$DateTime, function(x) any(x < N_1_IRIS$Max_DateTime & x > N_1_IRIS$Min_DateTime))
+N_1_merge$IRIS2 <- sapply(N_1_merge$cut_floor.x, function(x) any(x < N_1_IRIS$Max_DateTime & x > N_1_IRIS$Min_DateTime))
+N_1_merge$IRIS <- ifelse(N_1_merge$IRIS1==TRUE | N_1_merge$IRIS2==TRUE,TRUE,FALSE) 
+  
+```
+
+```{r final_crash}
+N_1_merge$Crash <- if_else(N_1_merge$IRIS==TRUE|N_1_merge$MNCMAT==TRUE,1,0)
+```
+
+
+Does the 15 minute time bin coincide with any weather events?
+
+```{r N_1_Weather}
+N_1_merge$weather1 <- sapply(N_1_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
+                                                                   x > weather_MSP$Starting_Time))
+N_1_merge$weather2 <- sapply(N_1_merge$cut_floor.x, function(x) any(x < weather_MSP$End_Time & 
+                                                                      x > weather_MSP$Starting_Time))
+N_1_merge$weather <- ifelse(N_1_merge$weather2==TRUE | N_1_merge$weather1==TRUE,1,0) 
+```
+
+```{r N_1_final}
+N_1_final <- N_1_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash)
+N_1_final$VMT_total[N_1_final$VMT_total == 0] <- NA
+write.csv(N_1_final,'N_1_final.csv',na='Null',row.names = FALSE)
+```
+
+
+
 ### S_3 I-94_EastBound MP 225.63 - MP 228.52
 
 Filter both the TT and VMT datasets
@@ -816,6 +873,64 @@ S_3_merge$weather <- ifelse(S_3_merge$weather2==TRUE | S_3_merge$weather1==TRUE,
 S_3_final <- S_3_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash)
 S_3_final$VMT_total[S_3_final$VMT_total == 0] <- NA
 write.csv(S_3_final,'S_3_final.csv',na='Null',row.names = FALSE)
+```
+
+
+
+
+### N_2 I-94_WestBound MP 228.52 - MP 225.63
+
+Filter both the TT and VMT datasets
+
+```{r N_2}
+N_2_VMT <- VMT(I_94_WB_VMT_melt,225.63,228.51,'15 mins')
+N_2_TT <- TT(I_94_WB_TT_melt,228.51,'15 mins')
+
+N_2_merge <- merge(seq_15min_2015,N_2_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
+N_2_merge <- merge(N_2_merge,N_2_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
+```
+
+
+Does the 15 minute time bin coincide with any MNCMAT events?
+
+```{r N_2_MNCMAT}
+N_2_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=225.63 &Measure_Round<=228.51 & Direction =='94W') %>% as.data.frame()
+
+N_2_merge$crash1 <- sapply(N_2_merge$DateTime, function(x) any(x < N_2_MNCMAT$EndDateTime & x > N_2_MNCMAT$DateTime))
+N_2_merge$crash2 <- sapply(N_2_merge$cut_floor.x, function(x) any(x < N_2_MNCMAT$EndDateTime & x > N_2_MNCMAT$DateTime))
+N_2_merge$MNCMAT <- ifelse(N_2_merge$crash1==TRUE | N_2_merge$crash2==TRUE,TRUE,FALSE)
+```
+
+Does the 15 minute time bin coincide with any IRIS events?
+
+```{r N_2_IRIS}
+N_2_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=225.63 &Measure_Round<=228.51 & Direction == ' WB')
+
+N_2_merge$IRIS1 <- sapply(N_2_merge$DateTime, function(x) any(x < N_2_IRIS$Max_DateTime & x > N_2_IRIS$Min_DateTime))
+N_2_merge$IRIS2 <- sapply(N_2_merge$cut_floor.x, function(x) any(x < N_2_IRIS$Max_DateTime & x > N_2_IRIS$Min_DateTime))
+N_2_merge$IRIS <- ifelse(N_2_merge$IRIS1==TRUE | N_2_merge$IRIS2==TRUE,TRUE,FALSE) 
+  
+```
+
+```{r final_crash}
+N_2_merge$Crash <- if_else(N_2_merge$IRIS==TRUE|N_2_merge$MNCMAT==TRUE,1,0)
+```
+
+
+Does the 15 minute time bin coincide with any weather events?
+
+```{r N_2_Weather}
+N_2_merge$weather1 <- sapply(N_2_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
+                                                                   x > weather_MSP$Starting_Time))
+N_2_merge$weather2 <- sapply(N_2_merge$cut_floor.x, function(x) any(x < weather_MSP$End_Time & 
+                                                                      x > weather_MSP$Starting_Time))
+N_2_merge$weather <- ifelse(N_2_merge$weather2==TRUE | N_2_merge$weather1==TRUE,1,0) 
+```
+
+```{r N_2_final}
+N_2_final <- N_2_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash)
+N_2_final$VMT_total[N_2_final$VMT_total == 0] <- NA
+write.csv(N_2_final,'N_2_final.csv',na='Null',row.names = FALSE)
 ```
 
 
