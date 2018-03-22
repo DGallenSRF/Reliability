@@ -107,7 +107,8 @@ I_94_EB_TT <-  I_94_EB_TT %>%
   ##move the new columns to the front of the dataset
   select(Name,STN,STN_Name,STN_ID,Lane,filename,Average,everything())
   
-  
+###change the end of the day to 24:00 so it goes to the start of the next day
+colnames(I_94_EB_TT) <- sub('00:00:00$','24:00:00',colnames(I_94_EB_TT))
   
 
 ```
@@ -137,14 +138,14 @@ I_94_EB_TT_melt <-  I_94_EB_TT_melt %>%
   mutate(DateTime = as.POSIXct(paste(substr(gsub(".*\\_(.*)-.*","\\1",filename),1,8),
                                      str_sub(Time,-8,-1)),
                                      format="%Y%m%d %H:%M:%S"))
-  
+
 ```
 
 ```{r I_94_EB_TT drop_fields}
 
 ##drop the no longer needed columns.
 I_94_EB_TT_melt <- I_94_EB_TT_melt %>%
-  select(-c(Average,Time))
+  select(-c(Average))
 
 ##show the top of the dataset.
 head(I_94_EB_TT_melt)[1:5,1:length(I_94_EB_TT_melt)]  
@@ -171,9 +172,10 @@ We now join the Measure_Round value from the Linear Referenced Dataset in ArcMap
 ```{r I_94_EB_TT join_Measure_round}
 
 ##perform a join on our I_94_EB_TT_melt dataset with the Station table to get the Measure values for each station. 
-I_94_EB_TT_melt <- merge(I_94_EB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
+I_94_EB_TT_melt <- merge(I_94_EB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )%>%arrange(DateTime)
 
 I_94_EB_TT_melt$TT <- as.numeric(I_94_EB_TT_melt$TT)
+
 
 ##look at the top of the merged dataset
 head(I_94_EB_TT_melt,n=50)
@@ -251,6 +253,9 @@ I_94_WB_TT <-  I_94_WB_TT %>%
          Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
   ##move the new columns to the front of the dataset
   select(Name,STN,STN_Name,STN_ID,Lane,filename,Average,everything())
+
+###change the end of the day to 24:00 so it goes to the start of the next day
+colnames(I_94_WB_TT) <- sub('00:00:00$','24:00:00',colnames(I_94_WB_TT))
   
   
   
@@ -288,7 +293,7 @@ I_94_WB_TT_melt <-  I_94_WB_TT_melt %>%
 ```{r I_94_WB_TT remove_unneeded_fields}
 
 ##drop the no longer needed columns.
-I_94_WB_TT_melt <- I_94_WB_TT_melt %>% select(-c(Average,Time)) 
+I_94_WB_TT_melt <- I_94_WB_TT_melt %>% select(-c(Average)) 
 
 ##show the top of the dataset.
 head(I_94_WB_TT_melt)[1:5,1:length(I_94_WB_TT_melt)]  
@@ -386,6 +391,8 @@ I_94_WB_VMT <-  I_94_WB_VMT %>%
   ##remove total row
   filter(!grepl('Total',Name))
   
+###change the end of the day to 24:00 so it goes to the start of the next day
+colnames(I_94_WB_VMT) <- sub('00:00:00$','24:00:00',colnames(I_94_WB_VMT))
   
   
 
@@ -419,18 +426,7 @@ I_94_WB_VMT_melt <-  I_94_WB_VMT_melt %>%
   
 ```
 
-```{r I_94_WB_VMT remove_unneeded_fields}
 
-##drop the no longer needed columns.
-I_94_WB_VMT_melt <- I_94_WB_VMT_melt %>% select(-Time) 
-
-##show the top of the dataset.
-head(I_94_WB_VMT_melt)[1:5,1:length(I_94_WB_VMT_melt)]  
-
-
-```
-
-Load in the linear referenced Station values from the FileGeodatabase. The File Geodatabase is currently located on C Drive due to locking issue with File Geodatabases stored on the Network Drive. We will need the milepost for each station. We are importing the entire Station list and some will not have measure values. 
 
 
 ```{r I_94_WB_VMT join_Measure_round}
@@ -517,6 +513,10 @@ I_94_EB_VMT <-  I_94_EB_VMT %>%
   ##remove total row
   filter(!grepl('Total',Name))
 
+
+###change the end of the day to 24:00 so it goes to the start of the next day
+colnames(I_94_EB_VMT) <- sub('00:00:00$','24:00:00',colnames(I_94_EB_VMT))
+
 ```
 
 The dataset is still in the wide format:
@@ -547,16 +547,7 @@ I_94_EB_VMT_melt <-  I_94_EB_VMT_melt %>%
   
 ```
 
-```{r I_94_EB_VMT remove_unneeded_fields}
 
-##drop the no longer needed columns.
-I_94_EB_VMT_melt <- I_94_EB_VMT_melt %>% select(-Time) 
-
-##show the top of the dataset.
-head(I_94_EB_VMT_melt)[1:5,1:length(I_94_EB_VMT_melt)]  
-
-
-```
 
 Load in the linear referenced Station values from the FileGeodatabase. The File Geodatabase is currently located on C Drive due to locking issue with File Geodatabases stored on the Network Drive. We will need the milepost for each station. We are importing the entire Station list and some will not have measure values. 
 
@@ -784,6 +775,9 @@ S_3_merge <- merge(seq_15min_2015,S_3_TT,by.x="DateTime",by.y="cut_ceiling",all.
 S_3_merge <- merge(S_3_merge,S_3_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
 ```
 
+
+Does the 15 minute time bin coincide with any MNCMAT events?
+
 ```{r S_3_MNCMAT}
 S_3_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=225.63 &Measure_Round<=228.52 & Direction =='94E') %>% as.data.frame()
 
@@ -791,6 +785,8 @@ S_3_merge$crash1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_MNCMAT$En
 S_3_merge$crash2 <- sapply(S_3_merge$cut_floor.x, function(x) any(x < S_3_MNCMAT$EndDateTime & x > S_3_MNCMAT$DateTime))
 S_3_merge$MNCMAT <- ifelse(S_3_merge$crash1==TRUE | S_3_merge$crash2==TRUE,TRUE,FALSE)
 ```
+
+Does the 15 minute time bin coincide with any IRIS events?
 
 ```{r S_3_IRIS}
 S_3_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=225.63 & Measure_Round<=228.52 & Direction == ' EB')
@@ -801,16 +797,25 @@ S_3_merge$IRIS <- ifelse(S_3_merge$IRIS1==TRUE | S_3_merge$IRIS2==TRUE,TRUE,FALS
   
 ```
 
+```{r final_crash}
+S_3_merge$Crash <- if_else(S_3_merge$IRIS==TRUE|S_3_merge$MNCMAT==TRUE,1,0)
+```
+
+
+Does the 15 minute time bin coincide with any weather events?
+
 ```{r S_3_Weather}
 S_3_merge$weather1 <- sapply(S_3_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
                                                                    x > weather_MSP$Starting_Time))
 S_3_merge$weather2 <- sapply(S_3_merge$cut_floor.x, function(x) any(x < weather_MSP$End_Time & 
                                                                       x > weather_MSP$Starting_Time))
-S_3_merge$weather <- ifelse(S_3_merge$weather2==TRUE | S_3_merge$weather1==TRUE,TRUE,FALSE) 
+S_3_merge$weather <- ifelse(S_3_merge$weather2==TRUE | S_3_merge$weather1==TRUE,1,0) 
 ```
 
 ```{r S_3_final}
-S_3_final <- S_3_merge %>% select(DateTime,TT_mean,VMT_total,IRIS,crash,weather)
+S_3_final <- S_3_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash)
+S_3_final$VMT_total[S_3_final$VMT_total == 0] <- NA
+write.csv(S_3_final,'S_3_final.csv',na='Null',row.names = FALSE)
 ```
 
 
