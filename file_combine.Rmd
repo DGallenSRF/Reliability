@@ -173,6 +173,8 @@ We now join the Measure_Round value from the Linear Referenced Dataset in ArcMap
 ##perform a join on our I_94_EB_TT_melt dataset with the Station table to get the Measure values for each station. 
 I_94_EB_TT_melt <- merge(I_94_EB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
 
+I_94_EB_TT_melt$TT <- as.numeric(I_94_EB_TT_melt$TT)
+
 ##look at the top of the merged dataset
 head(I_94_EB_TT_melt,n=50)
 
@@ -301,6 +303,8 @@ Load in the linear referenced Station values from the FileGeodatabase. The File 
 
 ##perform a join on our I_94_WB_TT_melt dataset with the Station table to get the Measure values for each station. 
 I_94_WB_TT_melt <- merge(I_94_WB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
+
+I_94_WB_TT_melt$TT <- as.numeric(I_94_WB_TT_melt$TT)
 
 ##look at the top of the merged dataset
 head(I_94_WB_TT_melt,n=50)
@@ -434,6 +438,8 @@ Load in the linear referenced Station values from the FileGeodatabase. The File 
 ##perform a join on our I_94_WB_VMT_melt dataset with the Station table to get the Measure values for each station. 
 I_94_WB_VMT_melt <- merge(I_94_WB_VMT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
 
+I_94_WB_VMT_melt$VMT <- as.numeric(I_94_WB_VMT_melt$VMT)
+
 ##look at the top of the merged dataset
 head(I_94_WB_VMT_melt,n=50)
 
@@ -559,6 +565,9 @@ Load in the linear referenced Station values from the FileGeodatabase. The File 
 
 ##perform a join on our I_94_EB_VMT_melt dataset with the Station table to get the Measure values for each station. 
 I_94_EB_VMT_melt <- merge(I_94_EB_VMT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
+
+I_94_EB_VMT_melt$VMT <- as.numeric(I_94_EB_VMT_melt$VMT)
+
 
 ##look at the top of the merged dataset
 head(I_94_EB_VMT_melt,n=50)
@@ -734,7 +743,7 @@ TT <- function(data,Station_MP,bins){
   mutate(cut_ceiling=ceiling_date(DateTime,bins),
          cut_floor=floor_date(DateTime,bins))%>%
   group_by(cut_ceiling)%>%
-  summarise(TT_mean=mean(as.numeric(TT)),
+  summarise(TT_mean=mean(TT),
             cut_floor=min(cut_floor))%>%
   as.data.frame()
 }
@@ -750,7 +759,7 @@ VMT <- function(data, from, to, bins){
   mutate(cut_ceiling=ceiling_date(DateTime,bins),
          cut_floor=floor_date(DateTime,bins))%>%
   group_by(cut_ceiling)%>%
-  summarise(VMT_total = sum(as.numeric(VMT)),
+  summarise(VMT_total = if_else(any(VMT<0),0, sum(VMT)),
             cut_floor=min(cut_floor))%>%
   as.data.frame()
 }
@@ -814,13 +823,12 @@ S_3_final <- S_3_merge %>% select(DateTime,TT_mean,VMT_total,IRIS,crash,weather)
 TT_summary <- function(data,name){
   x <- data %>%
   group_by(filename)%>%
-  mutate(TT_num = as.numeric(TT))%>%
-  summarise(Min=min(TT_num),
-            Max=max(TT_num),
-            Mean=mean(TT_num),
-            Median=median(TT_num),
-            SD=sd(TT_num),
-            below_0_percent = sum(TT_num<0)/length(TT_num))
+  summarise(Min=min(TT),
+            Max=max(TT),
+            Mean=mean(TT),
+            Median=median(TT),
+            SD=sd(TT),
+            below_0_percent = sum(TT<0)/length(TT))
             
   
   write.csv(x,name)
@@ -837,13 +845,13 @@ TT_summary(I_94_WB_TT_melt,"I_94_WB_TT_summary.csv")
 VMT_summary <- function(data,name){
   x <- data %>%
   group_by(filename)%>%
-  mutate(VMT_num = as.numeric(VMT))%>%
-  summarise(Min=min(VMT_num),
-            Max=max(VMT_num),
-            Mean=mean(VMT_num),
-            Median=median(VMT_num),
-            SD=sd(VMT_num),
-            below_0_percent = sum(VMT_num<0)/length(VMT_num))
+  mutate(VMT = as.numeric(VMT))%>%
+  summarise(Min=min(VMT),
+            Max=max(VMT),
+            Mean=mean(VMT),
+            Median=median(VMT),
+            SD=sd(VMT),
+            below_0_percent = sum(VMT<0)/length(VMT))
   
   write.csv(x,name)
   print(x)
