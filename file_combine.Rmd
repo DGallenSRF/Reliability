@@ -729,33 +729,90 @@ print(Seg)
 
 ```{r TT_filter}
 
-TT <- function(data,Station_MP,bins){
-  data%>%
-  filter(Measure_Round==Station_MP)%>%
+
+
+TT <- function(data,from,to,bins){
+data_from <-   data%>%
+  filter(Measure_Round == from)%>%
   filter(!is.na(DateTime))%>%
   mutate(cut_ceiling=ceiling_date(DateTime,bins),
          cut_floor=floor_date(DateTime,bins))%>%
   group_by(cut_ceiling)%>%
-  summarise(TT_mean=mean(TT),
-            cut_floor=min(cut_floor))%>%
-  as.data.frame()
-}
+  summarise(TT_mean_from=mean(TT),
+            cut_floor=min(cut_floor))
+
+data_to <-   data%>%
+  filter(Measure_Round == to)%>%
+  filter(!is.na(DateTime))%>%
+  mutate(cut_ceiling=ceiling_date(DateTime,bins),
+         cut_floor=floor_date(DateTime,bins))%>%
+  group_by(cut_ceiling)%>%
+  summarise(TT_mean_to=mean(TT),
+            cut_floor=min(cut_floor))  
   
+merge_data <-  merge(data_from,data_to,by='cut_ceiling',all.x=TRUE,all.y=TRUE)  %>%
+  mutate(TT_mean= TT_mean_to-TT_mean_from)
+return(merge_data)
+
+}
+
 ```
 
 ```{r VMT_filter}
 
 VMT <- function(data, from, to, bins){
-  data %>%
-  filter(Measure_Round >= from & Measure_Round <= to)%>%
+data_from <-   data %>%
+  filter(Measure_Round <= from )%>%
   filter(!is.na(DateTime))%>%
   mutate(cut_ceiling=ceiling_date(DateTime,bins),
          cut_floor=floor_date(DateTime,bins))%>%
   group_by(cut_ceiling)%>%
-  summarise(VMT_total = if_else(any(VMT<0),0, sum(VMT)),
+  summarise(VMT_total_from = if_else(any(VMT<0),0, sum(VMT)),
             cut_floor=min(cut_floor))%>%
   as.data.frame()
+  
+data_to <-  data %>%
+  filter(Measure_Round <= to )%>%
+  filter(!is.na(DateTime))%>%
+  mutate(cut_ceiling=ceiling_date(DateTime,bins),
+         cut_floor=floor_date(DateTime,bins))%>%
+  group_by(cut_ceiling)%>%
+  summarise(VMT_total_to = if_else(any(VMT<0),0, sum(VMT)),
+            cut_floor=min(cut_floor))%>%
+  as.data.frame()
+
+merge_data <-  merge(data_from,data_to,by='cut_ceiling',all.x=TRUE,all.y=TRUE)  %>%
+  mutate(VMT_total= VMT_total_to-VMT_total_from)
+return(merge_data)
+
 }
+
+VMT_switch <- function(data, from, to, bins){
+data_from <-   data %>%
+  filter(Measure_Round >= from )%>%
+  filter(!is.na(DateTime))%>%
+  mutate(cut_ceiling=ceiling_date(DateTime,bins),
+         cut_floor=floor_date(DateTime,bins))%>%
+  group_by(cut_ceiling)%>%
+  summarise(VMT_total_from = if_else(any(VMT<0),0, sum(VMT)),
+            cut_floor=min(cut_floor))%>%
+  as.data.frame()
+  
+data_to <-  data %>%
+  filter(Measure_Round >= to )%>%
+  filter(!is.na(DateTime))%>%
+  mutate(cut_ceiling=ceiling_date(DateTime,bins),
+         cut_floor=floor_date(DateTime,bins))%>%
+  group_by(cut_ceiling)%>%
+  summarise(VMT_total_to = if_else(any(VMT<0),0, sum(VMT)),
+            cut_floor=min(cut_floor))%>%
+  as.data.frame()
+  
+merge_data <-  merge(data_from,data_to,by='cut_ceiling',all.x=TRUE,all.y=TRUE)  %>%
+  mutate(VMT_total= VMT_total_to-VMT_total_from)
+return(merge_data)
+}
+
 ```
 
 ```{r 15_minute_seq_2015}
@@ -941,8 +998,8 @@ write.csv(N_4_final,'N_4_final.csv',na='Null',row.names = FALSE)
 Filter both the TT and VMT datasets
 
 ```{r N_1}
-N_1_VMT <- VMT(I_94_WB_VMT_melt,228.51,230.69,'15 mins')
-N_1_TT <- TT(I_94_WB_TT_melt,228.51,'15 mins')
+N_1_VMT <- VMT_switch(I_94_WB_VMT_melt,230.69,228.51,'15 mins')
+N_1_TT <- TT(I_94_WB_TT_melt,230.69,228.51,'15 mins')
 
 N_1_merge <- merge(seq_15min_2015,N_1_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
 N_1_merge <- merge(N_1_merge,N_1_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
@@ -1003,7 +1060,8 @@ N_1_merge$weather <- ifelse(N_1_merge$weather2==TRUE | N_1_merge$weather1==TRUE,
 ```{r N_1_final}
 N_1_final <- N_1_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash,INCIDENT,ROADWORK)
 N_1_final$VMT_total[N_1_final$VMT_total == 0] <- NA
-write.csv(N_1_final,'N_1_final_rev1.csv',na='Null',row.names = FALSE)
+N_1_final$VMT_total[N_1_final$VMT_total < 0] <- NA
+write.csv(N_1_final,'N_1_final_rev2.csv',na='Null',row.names = FALSE)
 ```
 
 
@@ -1014,8 +1072,8 @@ write.csv(N_1_final,'N_1_final_rev1.csv',na='Null',row.names = FALSE)
 Filter both the TT and VMT datasets
 
 ```{r N_2}
-N_2_VMT <- VMT(I_94_WB_VMT_melt,225.63,228.51,'15 mins')
-N_2_TT <- TT(I_94_WB_TT_melt,228.51,'15 mins')
+N_2_VMT <- VMT_switch(I_94_WB_VMT_melt,228.51,225.63,'15 mins')
+N_2_TT <- TT(I_94_WB_TT_melt,228.51,225.63,'15 mins')
 
 N_2_merge <- merge(seq_15min_2015,N_2_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
 N_2_merge <- merge(N_2_merge,N_2_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
@@ -1076,7 +1134,8 @@ N_2_merge$weather <- ifelse(N_2_merge$weather2==TRUE | N_2_merge$weather1==TRUE,
 ```{r N_2_final}
 N_2_final <- N_2_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash,INCIDENT,ROADWORK)
 N_2_final$VMT_total[N_2_final$VMT_total == 0] <- NA
-write.csv(N_2_final,'N_2_final.csv',na='Null',row.names = FALSE)
+N_2_final$VMT_total[N_2_final$VMT_total < 0] <- NA
+write.csv(N_2_final,'N_2_final_rev3.csv',na='Null',row.names = FALSE)
 ```
 
 
@@ -1089,7 +1148,7 @@ Filter both the TT and VMT datasets
 
 ```{r S_3}
 S_3_VMT <- VMT(I_94_EB_VMT_melt,225.63,228.52,'15 mins')
-S_3_TT <- TT(I_94_EB_TT_melt,228.52,'15 mins')
+S_3_TT <- TT(I_94_EB_TT_melt,225.63,228.52,'15 mins')
 
 S_3_merge <- merge(seq_15min_2015,S_3_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
 S_3_merge <- merge(S_3_merge,S_3_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
@@ -1099,7 +1158,7 @@ S_3_merge <- merge(S_3_merge,S_3_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TR
 Does the 15 minute time bin coincide with any MNCMAT events?
 
 ```{r S_3_MNCMAT}
-S_3_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=225.63 &Measure_Round<=228.51 & Direction =='94W') %>% as.data.frame()
+S_3_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=225.63 &Measure_Round<=228.52 & Direction =='94W') %>% as.data.frame()
 
 S_3_merge$crash1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_MNCMAT$EndDateTime & x > S_3_MNCMAT$DateTime))
 S_3_merge$crash2 <- sapply(S_3_merge$lag, function(x) any(x < S_3_MNCMAT$EndDateTime & x > S_3_MNCMAT$DateTime))
@@ -1109,7 +1168,7 @@ S_3_merge$MNCMAT <- ifelse(S_3_merge$crash1==TRUE | S_3_merge$crash2==TRUE,TRUE,
 Does the 15 minute time bin coincide with any IRIS events?
 
 ```{r S_3_IRIS}
-S_3_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=225.63 &Measure_Round<=228.51 & Direction == ' WB')
+S_3_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=225.63 &Measure_Round<=228.52 & Direction == ' WB')
 
 ##CRASH
 S_3_merge$IRIS_CRASH1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_IRIS$Max_DateTime[S_3_IRIS$Descr=='CRASH'] & x > S_3_IRIS$Min_DateTime[S_3_IRIS$Descr=='CRASH']))
@@ -1148,9 +1207,10 @@ S_3_merge$weather <- ifelse(S_3_merge$weather2==TRUE | S_3_merge$weather1==TRUE,
 ```
 
 ```{r S_3_final}
-S_3_final <- S_3_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash,INCIDENT,ROADWORK)
+S_3_final <- S_3_merge %>% select(DateTime,VMT_total,TT_mean_to,weather,Crash,INCIDENT,ROADWORK)
 S_3_final$VMT_total[S_3_final$VMT_total == 0] <- NA
-write.csv(S_3_final,'S_3_final.csv',na='Null',row.names = FALSE)
+S_3_final$VMT_total[S_3_final$VMT_total < 0] <- NA
+write.csv(S_3_final,'S_3_final_rev2.csv',na='Null',row.names = FALSE)
 ```
 
 
@@ -1163,7 +1223,7 @@ Filter both the TT and VMT datasets
 
 ```{r S_4}
 S_4_VMT <- VMT(I_94_EB_VMT_melt,228.52,230.72,'15 mins')
-S_4_TT <- TT(I_94_EB_TT_melt,230.72,'15 mins')
+S_4_TT <- TT(I_94_EB_TT_melt,228.52,230.72,'15 mins')
 
 S_4_merge <- merge(seq_15min_2015,S_4_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
 S_4_merge <- merge(S_4_merge,S_4_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
@@ -1224,8 +1284,9 @@ S_4_merge$weather <- ifelse(S_4_merge$weather2==TRUE | S_4_merge$weather1==TRUE,
 
 ```{r S_4_final}
 S_4_final <- S_4_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash,INCIDENT,ROADWORK)
-S_4_final$VMT_total[S_4_final$VMT_total == 0] <- NA
-write.csv(S_4_final,'S_4_final_rev1.csv',na='Null',row.names = FALSE)
+S_4_final$VMT_total[S_4_final$VMT_total ==0] <- NA
+S_4_final$VMT_total[S_4_final$VMT_total <0] <- NA
+write.csv(S_4_final,'S_4_final_rev2.csv',na='Null',row.names = FALSE)
 ```
 
 
