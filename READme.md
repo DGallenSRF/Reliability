@@ -1,7 +1,7 @@
 # Headings (\# \#\# \#\#\# etc.)
 
 
-Alt Heading 1 (Headings need 4 = or -)
+Alt 1 (Headings need 4 = or -)
 ====
 
 Alt Heading 2 (Headings need 4 = or -)
