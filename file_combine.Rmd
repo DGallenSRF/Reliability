@@ -6,6 +6,7 @@ output: html_notebook
 ```{r setup,warning=FALSE}
 knitr::opts_knit$set(root.dir = 'H:/Projects/10000/10200/TS/Reliability/Data')
 
+##below are a list of packages required to run the markdown file
 library(tidyverse)
 library(lubridate)
 library(gridExtra)
@@ -16,7 +17,10 @@ library(rgdal)
 ```
 
 
-We set the working directroy for the data files. Here are the sub-folders at this Network Location. 
+We set the working directroy for the data files in the code above:
+'H:/Projects/10000/10200/TS/Reliability/Data'
+
+Here are the sub-folders at this Network Location. 
 
 ```{r dir_list}
 data.frame(file.info(dir()))
@@ -24,14 +28,27 @@ data.frame(file.info(dir()))
 
 ##Load Station Linear References
 
-Load in the linear referenced Station values from the FileGeodatabase. The File Geodatabase is currently located on C Drive due to locking issue with File Geodatabases stored on the Network Drive. We will need the milepost for each station. We are importing the entire Station list and some will not have measure values. 
+Load in the linear referenced Station values from the FileGeodatabase. The File Geodatabase is currently located on a C Drive due to locking issue with File Geodatabases stored on the Network Drive.
+
+MNDOT have a linear referenced network of roadways. These roadways are represented by polylines in ArcGIS and each polyline has a Milepost value that increases/decreases as you traverse the line. This allows any GPS point that lies close to any specific polyline to be "placed along the route" (ArcMap function name) and then given a Milepost value.
+
+We used the 2016 Linear referencing dataset to give each Station and Detector location a relevant MP determined by the Roadway they are assoicated with.
+
+We will need the milepost for each station. This will allow us to filter and segment crash data (which has GPS coordinates) while also filtering Station and Detector Data.
+
+Caution: the Milepost values travel in one direction per corridor. For instance EB on I-94 in increasing MP whereas WB on I-94 is decreasing.
+
+We are importing the entire Station list and some will not have measure values yet. 
 
 ```{r I_94_EB_TT connect_geodb_read_station}
+### The location of the file geodatabase on the relevant C Drive
 fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
 Station <- as.data.frame(readOGR(dsn=fgdb,layer="Station"))
 
+##filter all stations that have been Linear Referenced.
 Station <- Station[!is.na(Station$Measure),]
 
+###Some exploration on the Station Dataset.
 head(Station)
 class(Station)
 colnames(Station)
@@ -46,22 +63,28 @@ We will focus on the Travel Time data for I_94 EB first.
 
 To load the Travel Time Data we first check that the files are present in the relevant folder. There are `r length(dir('./TICAS/I-94 EB'))` located in "./TICAS/I-94 EB".
 
+
+The top ten files in the folder are shown here:
 ```{r I_94_EB_TT Top_10_Files_dir}
 dir('./TICAS/I-94 EB')[1:10]
 ```
 
-Investigate the data structure of each TT File. Each file is for a specific day, with the file name giving the actual day. 
+Each file is for a specific day, with the file name giving the actual day. 
+
+Below we will investigate one of the files (top 5 rows, first 5 columns):
+
 
 ```{r I_94_EB_TT sample_TT_data}
 head(read.csv('./TICAS/I-94 EB/TT_201501010000-201501020000.csv')[1:5,1:5])
 ```
 
-Data is not in a tidy format. Rows do not appear to have names and the data is in a 'wide' format as opposed to the preferred 'long' format i.e each column is a new time. Also from opening some of the csv files manually using Excel we notice that the date column headers are not always correct. 
+Data is not in a tidy format. Rows do not appear to have names and the data is in a 'wide' format as opposed to the preferred 'long' format i.e each column is a new time. We would prefer a column that is labelled 'Time' with each Station repeated as rows. Also from opening some of the csv files manually using Excel we notice that the date portion of the column headers are rarely correct. 
 
-The file name states that the data is for Feb 9th to Feb 10th, but the column headers still state Jan 1st. However, the time are correct and are incrementing in 5 minutes intervals.
+For example, one of the file name states that the data is for Feb 9th to Feb 10th, but the column headers still state Jan 1st. However, the time seem to be correct and are incrementing in 5 minutes intervals.
 
-We will choose to ignore the column header to identify dates and we will import the filenames to give the true date reading. 
-We will also fill down each row name to ensure that there are no blank station names. 
+We will choose to ignore the column header to identify dates and we will import the filenames to give the true date reading. We will still use the time portion of the column headers.
+
+We will also fill down each row name to ensure that there are no blank station names. we will concatenate the accumulated distance with teh Station name to avoid repeated identical row names.  
 
 We will load the data into R and combine into one dataset. 
 
@@ -69,21 +92,23 @@ We will load the data into R and combine into one dataset.
 ### set the path for the I-94 EB data.
 path<-'./TICAS/I-94 EB'
 
-### list out all the csv files that start with TT_ and then have a number. This will avoid loading in the aggregated files.
+### list out all the csv files that start with TT_ and then have a number. This will avoid loading in the unwanted aggregated files or VMT files.
+###'^TT_\\d.' returns all files that start with TT_ and then are followed by a number.
 list_csv <- dir(path=path,pattern = '^TT_\\d.')
 
 ##use lapply to read each file in the list, creating a large list object. 
 ###We set header to be false because as we established the headers cannot be trused for dates. This will also aid in combining the dataset later.
+###column names will be defaulted V1 - Vn
 myfiles <- lapply(paste(path,'/',list_csv,sep=''),function(x)read.csv(x,header = FALSE,stringsAsFactors = FALSE))
 
-## we not add a column to each list element for the corresponding filenames we loaded. 
+## we now add a column to each list element for the corresponding filenames we loaded. 
 ##This will be used to create a true datetime attribute.
 files <- mapply(cbind,myfiles,'filename' = list_csv,SIMPLIFY = F)
 
-## bind all the elements of the list together.
+## bind all the elements of the list together. This will convert the large list object to a dataframe. 
 I_94_EB_TT <- bind_rows(files)
 
-## we need to get rid of the symbol in the station name column and turn it to NA.
+## we need to get rid of the symbol that is between each station name and turn it to NA.
 symbol <- I_94_EB_TT$V1[4]
 
 I_94_EB_TT$V1[I_94_EB_TT$V1==symbol] <- NA
@@ -92,32 +117,33 @@ I_94_EB_TT$V1[I_94_EB_TT$V1==symbol] <- NA
 We now clean the dataset and assign appropriate column names. 
 
 ```{r I_94_EB_TT fix_colnames_add_fields}
-###I_94_EB_TT <- x
 
-### Give the dataset the column name from the first row. This is only temporary.
+### Give the dataset the column name from the first row. We will only use the time portion of this first row. 
 colnames(I_94_EB_TT) <- I_94_EB_TT[1,]
 colnames(I_94_EB_TT)[1] <- "STN_Name"
-colnames(I_94_EB_TT)[292] <- 'filename'
-colnames(I_94_EB_TT) <-trimws(colnames(I_94_EB_TT))
 
+##The last column will be the filenames
+colnames(I_94_EB_TT)[length(I_94_EB_TT)] <- 'filename'
+
+#remove leading and trailing spaces in the column names. 
+colnames(I_94_EB_TT) <-trimws(colnames(I_94_EB_TT))
 
 ##remove the first row as it has now been transferred to the column names. 
 I_94_EB_TT <- I_94_EB_TT[-1,]
 
 ## use dplyr piping to:
 I_94_EB_TT <-  I_94_EB_TT %>%
-  
-  ##remove all of the headers that were read in orginially
+  ##remove all of the headers that we ignored and that were read in orginially. These are identified by the rows which contain Accumulated Distance, an initial header name. 
   filter(I_94_EB_TT$`Accumulated Distance` != " Accumulated Distance")%>%
   
-  ##Create new fields:
-  ###fill in the blank rows with the previous name
-  mutate(Name = paste(na.locf(STN_Name,na.rm=F),`Accumulated Distance`,seq=''),
-         ###extract the station name from each row. The station name is included in parenthesis. 
-         STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
-         STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
-         ## get the total lane number from the end of the station string.
-         Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
+##Create new fields:
+###fill in the blank Station Name rows with the previous name and concatentate the accumulated Distance. 
+mutate(Name = paste(na.locf(STN_Name,na.rm=F),`Accumulated Distance`,seq=''),
+       ##extract the station name from each row. The station name is included in parenthesis. 
+       STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
+       STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
+       ## get the total lane number from the end of the station string.
+       Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
   ##move the new columns to the front of the dataset
   select(Name,STN,STN_Name,STN_ID,Lane,filename,Average,everything())
   
@@ -131,10 +157,11 @@ The dataset is still in the wide format:
 
 ```{r I_94_EB_TT check_data_for_header_filter}
 head(I_94_EB_TT[1:5,1:10])
+##check to make sure that there are no header rows remaining. 
 table(I_94_EB_TT$`Accumulated Distance` == "Accumulated Distance")
 ```
 
-Lets turn get a Time and Travel Time field effectively turning the dataset into the 'long format'. 
+We 'melt' the dataframe to obtain a Time and Travel Time field, effectively changing the dataset from 'wide' to the 'long format'. 
 
 The melt function from reshape2 works well for this purpose.
 
@@ -143,6 +170,7 @@ I_94_EB_TT_melt <- melt(I_94_EB_TT,id.vars = c(1:8),variable.name = "Time",value
 head(I_94_EB_TT_melt)
 ```
 
+We need to create an appropriate DateTime column from a combination of the Time column headers and the filename. 
 
 ```{r I_94_EB_TT add_DateTime_I-94_EB}
 I_94_EB_TT_melt <-  I_94_EB_TT_melt %>%
@@ -154,6 +182,8 @@ I_94_EB_TT_melt <-  I_94_EB_TT_melt %>%
                                      format="%Y%m%d %H:%M:%S"))
 
 ```
+
+We don't need the Average column so we remove.
 
 ```{r I_94_EB_TT drop_fields}
 
@@ -168,18 +198,20 @@ head(I_94_EB_TT_melt)[1:5,1:length(I_94_EB_TT_melt)]
 ```
 
 
-We now join the Measure_Round value from the Linear Referenced Dataset in ArcMap to each station in our current dataset.
+We now 'join' the Measure_Round value from the Linear Referenced Dataset in ArcMap to each station in our current dataset.
+
+The Measure field created by Linear Referencing has alot of significant digits. The Measure_Round field is the Measure field rounded to 2 decimal places in ArcMap. Measure_Round is the value we will reference.
 
 ```{r I_94_EB_TT join_Measure_round}
 
 ##perform a join on our I_94_EB_TT_melt dataset with the Station table to get the Measure values for each station. 
 I_94_EB_TT_melt <- merge(I_94_EB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )%>%arrange(DateTime)
 
+###TT field was read in intially as a character field. change to numneric.
 I_94_EB_TT_melt$TT <- as.numeric(I_94_EB_TT_melt$TT)
 
-
 ##look at the top of the merged dataset
-head(I_94_EB_TT_melt,n=50)
+head(I_94_EB_TT_melt,n=15)
 
 tail(I_94_EB_TT_melt,n=15)
 
@@ -188,13 +220,19 @@ print(table(is.na(I_94_EB_TT_melt$Measure)))
 
 ```
 
-The Measure field has alot of significant digits. The Measure_Round field is the Measure field round to 2 decimal places in ArcMap. 
+
 
 
 
 ###I-94 Westbound Travel Time
 
 We will focus on the Travel Time data for I_94 WB.
+
+The process here is the same as used in the Eastbound portion. All of the same comments may not be present here. 
+
+Each file is for a specific day, with the file name giving the actual day. 
+
+Below we will investigate one of the files (top 5 rows, first 5 columns):
 
 
 ```{r I_94_WB_TT  read_bind,warning=FALSE,echo=FALSE,include=FALSE}
@@ -226,7 +264,7 @@ x <- I_94_WB_TT
 We now clean the dataset and assign appropriate column names. 
 
 ```{r I_94_WB_TT  clean_mutate}
-###I_94_WB_TT <- x
+
 
 ### Give the dataset the column name from the first row. This is only temporary.
 colnames(I_94_WB_TT) <- I_94_WB_TT[1,]
@@ -271,7 +309,7 @@ head(I_94_WB_TT[1:5,1:10])
 table(I_94_WB_TT$`Accumulated Distance` == "Accumulated Distance")
 ```
 
-Lets turn get a Time and Travel Time field effectively turning the dataset into the 'long format'. 
+We 'melt' the dataframe to obtain a Time and Travel Time field, effectively changing the dataset from 'wide' to the 'long format'. 
 
 The melt function from reshape2 works well for this purpose.
 
@@ -279,6 +317,8 @@ The melt function from reshape2 works well for this purpose.
 I_94_WB_TT_melt <- melt(I_94_WB_TT,id.vars = c(1:8),variable.name = "Time",value.name = 'TT')
 head(I_94_WB_TT_melt)
 ```
+
+We need to create an appropriate DateTime column from a combination of the Time column headers and the filename. 
 
 ```{r I_94_WB_TT add_DateTime}
 I_94_WB_TT_melt <-  I_94_WB_TT_melt %>%
@@ -291,6 +331,8 @@ I_94_WB_TT_melt <-  I_94_WB_TT_melt %>%
   
 ```
 
+We don't need the Average column so we remove.
+
 ```{r I_94_WB_TT remove_unneeded_fields}
 
 ##drop the no longer needed columns.
@@ -302,7 +344,9 @@ head(I_94_WB_TT_melt)[1:5,1:length(I_94_WB_TT_melt)]
 
 ```
 
-Load in the linear referenced Station values from the FileGeodatabase. The File Geodatabase is currently located on C Drive due to locking issue with File Geodatabases stored on the Network Drive. We will need the milepost for each station. We are importing the entire Station list and some will not have measure values. 
+We now 'join' the Measure_Round value from the Linear Referenced Dataset in ArcMap to each station in our current dataset.
+
+The Measure field created by Linear Referencing has alot of significant digits. The Measure_Round field is the Measure field rounded to 2 decimal places in ArcMap. Measure_Round is the value we will reference.
 
 
 ```{r I_94_WB_TT join_Measure_round}
@@ -322,7 +366,7 @@ table(is.na(I_94_WB_TT_melt$Measure))
 
 ```
 
-The Measure field has alot of significant digits. The Measure_Round field is the Measure field round to 2 decimal places in ArcMap. 
+
 
 
 
@@ -331,6 +375,10 @@ The Measure field has alot of significant digits. The Measure_Round field is the
 
 ###VMT I-94 Westbound
 
+
+Each file is for a specific day, with the file name giving the actual day. 
+
+Below we will investigate one of the files (top 5 rows, first 5 columns):
 
 ```{r I_94_WB_VMT read_VMT_bind,warning=FALSE,echo=FALSE,include=FALSE}
 ### set the path for the I-94 EB data.
@@ -355,13 +403,13 @@ symbol <- I_94_WB_VMT$V1[4]
 
 I_94_WB_VMT$V1[I_94_WB_VMT$V1==symbol] <- NA
 
-x <- I_94_WB_VMT
+
 ```
 
 We now clean the dataset and assign appropriate column names. 
 
 ```{r I_94_WB_VMT  clean_mutate}
-##I_94_WB_VMT <- x
+
 
 ### Give the dataset the column name from the first row. This is only temporary.
 colnames(I_94_WB_VMT) <- I_94_WB_VMT[1,]
@@ -415,6 +463,7 @@ The melt function from reshape2 works well for this purpose.
 I_94_WB_VMT_melt <- melt(I_94_WB_VMT,id.vars = c(1:7),variable.name = "Time",value.name = 'VMT')
 head(I_94_WB_VMT_melt)
 ```
+We need to create an appropriate DateTime column from a combination of the Time column headers and the filename. 
 
 ```{r I_94_WB_VMT add_DateTime}
 I_94_WB_VMT_melt <-  I_94_WB_VMT_melt %>%
@@ -427,6 +476,9 @@ I_94_WB_VMT_melt <-  I_94_WB_VMT_melt %>%
   
 ```
 
+We now 'join' the Measure_Round value from the Linear Referenced Dataset in ArcMap to each station in our current dataset.
+
+The Measure field created by Linear Referencing has alot of significant digits. The Measure_Round field is the Measure field rounded to 2 decimal places in ArcMap. Measure_Round is the value we will reference.
 
 ```{r I_94_WB_VMT join_Measure_round}
 
@@ -444,8 +496,6 @@ tail(I_94_WB_VMT_melt,n=15)
 table(is.na(I_94_WB_VMT_melt$Measure))
 
 ```
-
-The Measure field has alot of significant digits. The Measure_Round field is the Measure field round to 2 decimal places in ArcMap. 
 
 
 
@@ -535,6 +585,8 @@ I_94_EB_VMT_melt <- melt(I_94_EB_VMT,id.vars = c(1:7),variable.name = "Time",val
 head(I_94_EB_VMT_melt)
 ```
 
+We need to create an appropriate DateTime column from a combination of the Time column headers and the filename. 
+
 ```{r I_94_EB_VMT add_DateTime}
 I_94_EB_VMT_melt <-  I_94_EB_VMT_melt %>%
   
@@ -546,9 +598,9 @@ I_94_EB_VMT_melt <-  I_94_EB_VMT_melt %>%
   
 ```
 
+We now 'join' the Measure_Round value from the Linear Referenced Dataset in ArcMap to each station in our current dataset.
 
-
-Load in the linear referenced Station values from the FileGeodatabase. The File Geodatabase is currently located on C Drive due to locking issue with File Geodatabases stored on the Network Drive. We will need the milepost for each station. We are importing the entire Station list and some will not have measure values. 
+The Measure field created by Linear Referencing has alot of significant digits. The Measure_Round field is the Measure field rounded to 2 decimal places in ArcMap. Measure_Round is the value we will reference.
 
 
 ```{r I_94_EB_VMT join_Measure_round}
@@ -568,8 +620,6 @@ tail(I_94_EB_VMT_melt,n=15)
 table(is.na(I_94_EB_VMT_melt$Measure))
 
 ```
-
-The Measure field has alot of significant digits. The Measure_Round field is the Measure field round to 2 decimal places in ArcMap. 
 
 
 
@@ -608,7 +658,7 @@ MNCMAT[is.na(MNCMAT$DateTime),c("Month","Day","Time","Year","DateTime")]
 ```
 
 The Time values of 9998 are clearly in error and we will omit these records. 
-We will also filter out the values with no Measure value. These values are not in the scope of this project. 
+We will also filter out the values with no Measure_Round value. These values are not in the scope of this project. 
 
 ```{r remove_NAs}
 MNCMAT_final <- MNCMAT %>% 
@@ -645,6 +695,8 @@ head(MNCMAT_final)
 
 ## Crash Data IRIS
 
+Read the data from ArcMAP Geodatabase. There is a Measure_Round field that contains the linear referenced milepost that we will use to take to the TT and VMT datasets.
+
 ```{r read_IRIS_dataset_from_ARCMAP}
 fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
 IRIS_2015 <- as.data.frame(readOGR(dsn=fgdb,layer="IRIS_2015"))
@@ -671,7 +723,7 @@ The row appears to be blank so will remove the record.
 IRIS_2015 <- IRIS_2015[!is.na(IRIS_2015$DateTime),]
 ```
 
-We will group by event_id and return the min and max time. This will provide us with the interval for each incident. 
+We will group by event_id and return the min and max time for each event ID. This will provide us with the time interval for each incident. 
 
 ```{r aggregate_by_event_name}
 
@@ -719,6 +771,8 @@ weather_MSP$End_Time <- as.POSIXct(format(weather_MSP$End_Time),tz='US/Central')
 ##Filter Combine Segments
 
 ```{r load_segments}
+
+## we linear referenced the segment designations. This table will not be used and is only for reference. n
 ##load segment data
 fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
 Seg <- as.data.frame(readOGR(dsn=fgdb,layer="Segments"))
@@ -729,8 +783,12 @@ print(Seg)
 
 ```{r TT_filter}
 
+##We create some custom functions that "Split Apply Combine" the TT datasets
 
 
+##the TT function loads a clean TT dataset, filters for the segment bounds and aggregates into the time bins required.
+##to find the final aggregated Travel Times,  the function takes the starting TT at the 'from' MP and subtracts it from the 'to' MP.
+##the final number for the TT is the mean of all the TT in that time bin. 
 TT <- function(data,from,to,bins){
 data_from <-   data%>%
   filter(Measure_Round == from)%>%
@@ -760,6 +818,14 @@ return(merge_data)
 
 ```{r VMT_filter}
 
+##We create some custom functions that "Split Apply Combine" the VMT datasets
+
+
+##the VMT function loads a clean VMT dataset, filters for the segment bounds and aggregates into the time bins required.
+##to find the final Vehicular Miles travells,  the function takes the starting VMT at the 'from' MP and subtracts it from the 'to' MP.
+##the final number for the VMT is the mean of all the TT in that time bin. 
+
+
 VMT <- function(data, from, to, bins){
 data_from <-   data %>%
   filter(Measure_Round <= from )%>%
@@ -787,6 +853,8 @@ return(merge_data)
 
 }
 
+
+##The VMT_switch function is used when travel direction is opposite to the Milepost incrementing value.
 VMT_switch <- function(data, from, to, bins){
 data_from <-   data %>%
   filter(Measure_Round >= from )%>%
@@ -814,6 +882,8 @@ return(merge_data)
 }
 
 ```
+
+We create a vector of 15 min bins for 2015.
 
 ```{r 15_minute_seq_2015}
 
@@ -1142,13 +1212,13 @@ write.csv(N_2_final,'N_2_final_rev3.csv',na='Null',row.names = FALSE)
 
 
 
-### S_3 I-94_EastBound MP 225.63 - MP 228.52
+### S_3 I-94_EastBound MP 225.62 - MP 228.52
 
 Filter both the TT and VMT datasets
 
 ```{r S_3}
-S_3_VMT <- VMT(I_94_EB_VMT_melt,225.63,228.52,'15 mins')
-S_3_TT <- TT(I_94_EB_TT_melt,225.63,228.52,'15 mins')
+S_3_VMT <- VMT(I_94_EB_VMT_melt,225.62,228.52,'15 mins')
+S_3_TT <- TT(I_94_EB_TT_melt,225.62,228.52,'15 mins')
 
 S_3_merge <- merge(seq_15min_2015,S_3_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
 S_3_merge <- merge(S_3_merge,S_3_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
@@ -1158,7 +1228,7 @@ S_3_merge <- merge(S_3_merge,S_3_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TR
 Does the 15 minute time bin coincide with any MNCMAT events?
 
 ```{r S_3_MNCMAT}
-S_3_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=225.63 &Measure_Round<=228.52 & Direction =='94W') %>% as.data.frame()
+S_3_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=225.62 &Measure_Round<=228.52 & Direction =='94W') %>% as.data.frame()
 
 S_3_merge$crash1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_MNCMAT$EndDateTime & x > S_3_MNCMAT$DateTime))
 S_3_merge$crash2 <- sapply(S_3_merge$lag, function(x) any(x < S_3_MNCMAT$EndDateTime & x > S_3_MNCMAT$DateTime))
@@ -1168,7 +1238,7 @@ S_3_merge$MNCMAT <- ifelse(S_3_merge$crash1==TRUE | S_3_merge$crash2==TRUE,TRUE,
 Does the 15 minute time bin coincide with any IRIS events?
 
 ```{r S_3_IRIS}
-S_3_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=225.63 &Measure_Round<=228.52 & Direction == ' WB')
+S_3_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=225.62 &Measure_Round<=228.52 & Direction == ' WB')
 
 ##CRASH
 S_3_merge$IRIS_CRASH1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_IRIS$Max_DateTime[S_3_IRIS$Descr=='CRASH'] & x > S_3_IRIS$Min_DateTime[S_3_IRIS$Descr=='CRASH']))
@@ -1207,10 +1277,10 @@ S_3_merge$weather <- ifelse(S_3_merge$weather2==TRUE | S_3_merge$weather1==TRUE,
 ```
 
 ```{r S_3_final}
-S_3_final <- S_3_merge %>% select(DateTime,VMT_total,TT_mean_to,weather,Crash,INCIDENT,ROADWORK)
+S_3_final <- S_3_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash,INCIDENT,ROADWORK)
 S_3_final$VMT_total[S_3_final$VMT_total == 0] <- NA
 S_3_final$VMT_total[S_3_final$VMT_total < 0] <- NA
-write.csv(S_3_final,'S_3_final_rev2.csv',na='Null',row.names = FALSE)
+write.csv(S_3_final,'S_3_final_rev3.csv',na='Null',row.names = FALSE)
 ```
 
 
