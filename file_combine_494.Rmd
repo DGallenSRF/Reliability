@@ -4,7 +4,7 @@ output: html_notebook
 ---
 
 ```{r setup,warning=FALSE}
-knitr::opts_knit$set(root.dir = 'H:/Projects/10000/10200/TS/Reliability/Data')
+knitr::opts_knit$set(root.dir = 'H:/Projects/11000/11155/TraffStudy/Reliability')
 
 ##below are a list of packages required to run the markdown file
 library(tidyverse)
@@ -56,17 +56,17 @@ colnames(Station)
 
 ## Travel Time
 
-###I-94 Eastbound Travel Time
+###494 Eastbound Travel Time
 
-We will focus on the Travel Time data for I_94 EB first. 
+We will focus on the Travel Time data for 494 EB first. 
 
 
-To load the Travel Time Data we first check that the files are present in the relevant folder. There are `r length(dir('./TICAS/I-94 EB'))` located in "./TICAS/I-94 EB".
+To load the Travel Time Data we first check that the files are present in the relevant folder. There are `r length(dir('./494 EB/TT'))` located in "./TICAS/I-94 EB".
 
 
 The top ten files in the folder are shown here:
 ```{r I_94_EB_TT Top_10_Files_dir}
-dir('./TICAS/I-94 EB')[1:10]
+dir('./494 EB/TT')[1:10]
 ```
 
 Each file is for a specific day, with the file name giving the actual day. 
@@ -74,13 +74,13 @@ Each file is for a specific day, with the file name giving the actual day.
 Below we will investigate one of the files (top 5 rows, first 5 columns):
 
 
-```{r I_94_EB_TT sample_TT_data}
-head(read.csv('./TICAS/I-94 EB/TT_201501010000-201501020000.csv')[1:5,1:5])
+```{r 494_EB_TT sample_TT_data}
+head(read.csv('./494 EB/TT/TT_201701040000-201701050000.csv')[1:5,1:5])
 ```
 
 Data is not in a tidy format. Rows do not appear to have names and the data is in a 'wide' format as opposed to the preferred 'long' format i.e each column is a new time. We would prefer a column that is labelled 'Time' with each Station repeated as rows. Also from opening some of the csv files manually using Excel we notice that the date portion of the column headers are rarely correct. 
 
-For example, one of the file name states that the data is for Feb 9th to Feb 10th, but the column headers still state Jan 1st. However, the time seem to be correct and are incrementing in 5 minutes intervals.
+For example, the file loaded above states that the data is for Jan 4th to Feb 5th, but the column headers still state Jan 1st. However, the time seem to be correct and are incrementing in 5 minutes intervals.
 
 We will choose to ignore the column header to identify dates and we will import the filenames to give the true date reading. We will still use the time portion of the column headers.
 
@@ -88,9 +88,9 @@ We will also fill down each row name to ensure that there are no blank station n
 
 We will load the data into R and combine into one dataset. 
 
-```{r I_94_EB_TT read_TT_files_bind,warning=FALSE}
+```{r 494_EB_TT read_TT_files_bind,warning=FALSE}
 ### set the path for the I-94 EB data.
-path<-'./TICAS/I-94 EB'
+path <- './494 EB/TT'
 
 ### list out all the csv files that start with TT_ and then have a number. This will avoid loading in the unwanted aggregated files or VMT files.
 ###'^TT_\\d.' returns all files that start with TT_ and then are followed by a number.
@@ -106,93 +106,94 @@ myfiles <- lapply(paste(path,'/',list_csv,sep=''),function(x)read.csv(x,header =
 files <- mapply(cbind,myfiles,'filename' = list_csv,SIMPLIFY = F)
 
 ## bind all the elements of the list together. This will convert the large list object to a dataframe. 
-I_94_EB_TT <- bind_rows(files)
+EB_494_TT_data <- bind_rows(files)
 
 ## we need to get rid of the symbol that is between each station name and turn it to NA.
-symbol <- I_94_EB_TT$V1[4]
+symbol <- EB_494_TT_data$V1[4]
 
-I_94_EB_TT$V1[I_94_EB_TT$V1==symbol] <- NA
+EB_494_TT_data$V1[EB_494_TT_data$V1==symbol] <- NA
 ```
 
 We now clean the dataset and assign appropriate column names. 
 
-```{r I_94_EB_TT fix_colnames_add_fields}
+```{r EB_494_TT fix_colnames_add_fields}
 
 ### Give the dataset the column name from the first row. We will only use the time portion of this first row. 
-colnames(I_94_EB_TT) <- I_94_EB_TT[1,]
-colnames(I_94_EB_TT)[1] <- "STN_Name"
+colnames(EB_494_TT_data) <- EB_494_TT_data[1,]
+colnames(EB_494_TT_data)[1] <- "STN_Name"
 
 ##The last column will be the filenames
-colnames(I_94_EB_TT)[length(I_94_EB_TT)] <- 'filename'
+colnames(EB_494_TT_data)[length(EB_494_TT_data)] <- 'Filename'
 
 #remove leading and trailing spaces in the column names. 
-colnames(I_94_EB_TT) <-trimws(colnames(I_94_EB_TT))
+colnames(EB_494_TT_data) <-trimws(colnames(EB_494_TT_data))
+colnames(EB_494_TT_data) <- str_replace_all(colnames(EB_494_TT_data),"[[:punct:]|\\s]+","_")
 
 ##remove the first row as it has now been transferred to the column names. 
-I_94_EB_TT <- I_94_EB_TT[-1,]
+EB_494_TT_data <- EB_494_TT_data[-1,]
 
 ## use dplyr piping to:
-I_94_EB_TT <-  I_94_EB_TT %>%
+EB_494_TT <-  EB_494_TT_data %>%
   ##remove all of the headers that we ignored and that were read in orginially. These are identified by the rows which contain Accumulated Distance, an initial header name. 
-  filter(I_94_EB_TT$`Accumulated Distance` != " Accumulated Distance")%>%
+  filter(Accumulated_Distance != " Accumulated Distance")%>%
   
 ##Create new fields:
 ###fill in the blank Station Name rows with the previous name and concatentate the accumulated Distance. 
-mutate(Name = paste(na.locf(STN_Name,na.rm=F),`Accumulated Distance`,seq=''),
+mutate(Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
        ##extract the station name from each row. The station name is included in parenthesis. 
        STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
        STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
        ## get the total lane number from the end of the station string.
        Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
   ##move the new columns to the front of the dataset
-  select(Name,STN,STN_Name,STN_ID,Lane,filename,Average,everything())
+  select(Name,STN,STN_Name,STN_ID,Lane,Filename,Average,everything())
   
 ###change the end of the day to 24:00 so it goes to the start of the next day
-colnames(I_94_EB_TT) <- sub('00:00:00$','24:00:00',colnames(I_94_EB_TT))
+colnames(EB_494_TT) <- sub('00:00:00$','24:00:00',colnames(EB_494_TT))
   
 
 ```
 
 The dataset is still in the wide format:
 
-```{r I_94_EB_TT check_data_for_header_filter}
-head(I_94_EB_TT[1:5,1:10])
+```{r EB_494_TT check_data_for_header_filter}
+head(EB_494_TT[1:5,1:10])
 ##check to make sure that there are no header rows remaining. 
-table(I_94_EB_TT$`Accumulated Distance` == "Accumulated Distance")
+table(EB_494_TT$Accumulated_Distance == "Accumulated Distance")
 ```
 
 We 'melt' the dataframe to obtain a Time and Travel Time field, effectively changing the dataset from 'wide' to the 'long format'. 
 
 The melt function from reshape2 works well for this purpose.
 
-```{r I_94_EB_TT melt_I94_EB}
-I_94_EB_TT_melt <- melt(I_94_EB_TT,id.vars = c(1:8),variable.name = "Time",value.name = 'TT')
-head(I_94_EB_TT_melt)
+```{r EB_494_TT melt}
+EB_494_TT_melt <- melt(EB_494_TT,id.vars = c(1:8),variable.name = "Time",value.name = 'TT')
+head(EB_494_TT_melt)
 ```
 
 We need to create an appropriate DateTime column from a combination of the Time column headers and the filename. 
 
-```{r I_94_EB_TT add_DateTime_I-94_EB}
-I_94_EB_TT_melt <-  I_94_EB_TT_melt %>%
+```{r EB_494_TT_melt add_DateTime}
+EB_494_TT_melt <-  EB_494_TT_melt %>%
   
   ##we create a true datetime by merging the first day in the filename with the time from the column header.
   ##we make ensure it is a POSIX datetime format. 
-  mutate(DateTime = as.POSIXct(paste(substr(gsub(".*\\_(.*)-.*","\\1",filename),1,8),
+  mutate(DateTime = as.POSIXct(paste(substr(gsub(".*\\_(.*)-.*","\\1",Filename),1,8),
                                      str_sub(Time,-8,-1)),
-                                     format="%Y%m%d %H:%M:%S"))
+                                     format="%Y%m%d %H_%M_%S"))
 
 ```
 
 We don't need the Average column so we remove.
 
-```{r I_94_EB_TT drop_fields}
+```{r EB_494_TT_melt drop_fields}
 
 ##drop the no longer needed columns.
-I_94_EB_TT_melt <- I_94_EB_TT_melt %>%
+EB_494_TT_melt <- EB_494_TT_melt %>%
   select(-c(Average))
 
 ##show the top of the dataset.
-head(I_94_EB_TT_melt)[1:5,1:length(I_94_EB_TT_melt)]  
+head(EB_494_TT_melt)[1:5,1:length(EB_494_TT_melt)]  
 
 
 ```
@@ -202,7 +203,7 @@ We now 'join' the Measure_Round value from the Linear Referenced Dataset in ArcM
 
 The Measure field created by Linear Referencing has alot of significant digits. The Measure_Round field is the Measure field rounded to 2 decimal places in ArcMap. Measure_Round is the value we will reference.
 
-```{r I_94_EB_TT join_Measure_round}
+```{r EB_494_TT_melt join_Measure_round}
 
 ##perform a join on our I_94_EB_TT_melt dataset with the Station table to get the Measure values for each station. 
 I_94_EB_TT_melt <- merge(I_94_EB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )%>%arrange(DateTime)
@@ -224,7 +225,7 @@ print(table(is.na(I_94_EB_TT_melt$Measure)))
 
 
 
-###I-94 Westbound Travel Time
+###494 Westbound Travel Time
 
 We will focus on the Travel Time data for I_94 WB.
 
@@ -235,9 +236,9 @@ Each file is for a specific day, with the file name giving the actual day.
 Below we will investigate one of the files (top 5 rows, first 5 columns):
 
 
-```{r I_94_WB_TT  read_bind,warning=FALSE,echo=FALSE,include=FALSE}
+```{r WB_494_TT  read_bind,warning=FALSE,echo=FALSE,include=FALSE}
 ### set the path for the I-94 EB data.
-path<-'./TICAS/I-94 WB'
+path <- './494 EB/TT'
 
 ### list out all the csv files that start with TT_ and then have a number. This will avoid loading in the aggregated files.
 list_csv <- dir(path=path,pattern = '^TT_\\d.')
@@ -251,50 +252,51 @@ myfiles <- lapply(paste(path,'/',list_csv,sep=''),function(x)read.csv(x,header =
 files <- mapply(cbind,myfiles,'filename' = list_csv,SIMPLIFY = F)
 
 ## bind all the elements of the list together.
-I_94_WB_TT <- bind_rows(files)
+WB_494_TT_data <- bind_rows(files)
 
 ## we need to get rid of the symbol in the station name column and turn it to NA.
-symbol <- I_94_WB_TT$V1[4]
+symbol <- WB_494_TT_data$V1[4]
 
-I_94_WB_TT$V1[I_94_WB_TT$V1==symbol] <- NA
+WB_494_TT_data$V1[WB_494_TT_data$V1==symbol] <- NA
 
-x <- I_94_WB_TT
+
 ```
 
 We now clean the dataset and assign appropriate column names. 
 
-```{r I_94_WB_TT  clean_mutate}
+```{r WB_494_TT  clean_mutate}
 
+colnames(WB_494_TT_data) <- WB_494_TT_data[1,]
+colnames(WB_494_TT_data)[1] <- "STN_Name"
 
-### Give the dataset the column name from the first row. This is only temporary.
-colnames(I_94_WB_TT) <- I_94_WB_TT[1,]
-colnames(I_94_WB_TT)[1] <- "STN_Name"
-colnames(I_94_WB_TT)[292] <- 'filename'
-colnames(I_94_WB_TT) <-trimws(colnames(I_94_WB_TT))
+##The last column will be the filenames
+colnames(WB_494_TT_data)[length(WB_494_TT_data)] <- 'Filename'
 
+#remove leading and trailing spaces in the column names. 
+colnames(WB_494_TT_data) <-trimws(colnames(WB_494_TT_data))
+colnames(WB_494_TT_data) <- str_replace_all(colnames(WB_494_TT_data),"[[:punct:]|\\s]+","_")
 
 ##remove the first row as it has now been transferred to the column names. 
-I_94_WB_TT <- I_94_WB_TT[-1,]
+WB_494_TT_data <- WB_494_TT_data[-1,]
 
 ## use dplyr piping to:
-I_94_WB_TT <-  I_94_WB_TT %>%
+WB_494_TT <-  WB_494_TT_data %>%
+  ##remove all of the headers that we ignored and that were read in orginially. These are identified by the rows which contain Accumulated Distance, an initial header name. 
+  filter(Accumulated_Distance != " Accumulated Distance")%>%
   
-  ##remove all of the headers that were read in orginially
-  filter(I_94_WB_TT$`Accumulated Distance` != " Accumulated Distance")%>%
-  
-  ##Create new fields:
-  ###fill in the blank rows with the previous name
-  mutate(Name = paste(na.locf(STN_Name,na.rm=F),`Accumulated Distance`,seq=''),
-         ###extract the station name from each row. The station name is included in parenthesis. 
-         STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
-         STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
-         ## get the total lane number from the end of the station string.
-         Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
+##Create new fields:
+###fill in the blank Station Name rows with the previous name and concatentate the accumulated Distance. 
+mutate(Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
+       ##extract the station name from each row. The station name is included in parenthesis. 
+       STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
+       STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
+       ## get the total lane number from the end of the station string.
+       Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
   ##move the new columns to the front of the dataset
-  select(Name,STN,STN_Name,STN_ID,Lane,filename,Average,everything())
-
+  select(Name,STN,STN_Name,STN_ID,Lane,Filename,Average,everything())
+  
 ###change the end of the day to 24:00 so it goes to the start of the next day
-colnames(I_94_WB_TT) <- sub('00:00:00$','24:00:00',colnames(I_94_WB_TT))
+colnames(WB_494_TT) <- sub('00:00:00$','24:00:00',colnames(WB_494_TT))
   
   
   
@@ -303,43 +305,43 @@ colnames(I_94_WB_TT) <- sub('00:00:00$','24:00:00',colnames(I_94_WB_TT))
 
 The dataset is still in the wide format:
 
-```{r I_94_WB_TT  check_dataset}
+```{r WB_494_TT  check_dataset}
 
-head(I_94_WB_TT[1:5,1:10])
-table(I_94_WB_TT$`Accumulated Distance` == "Accumulated Distance")
+head(WB_494_TT[1:5,1:10])
+table(WB_494_TT$Accumulated_Distance == "Accumulated Distance")
 ```
 
 We 'melt' the dataframe to obtain a Time and Travel Time field, effectively changing the dataset from 'wide' to the 'long format'. 
 
 The melt function from reshape2 works well for this purpose.
 
-```{r melt_I94_WB_TT}
-I_94_WB_TT_melt <- melt(I_94_WB_TT,id.vars = c(1:8),variable.name = "Time",value.name = 'TT')
-head(I_94_WB_TT_melt)
+```{r melt WB_494_TT}
+WB_494_TT_melt <- melt(WB_494_TT,id.vars = c(1:8),variable.name = "Time",value.name = 'TT')
+head(WB_494_TT_melt)
 ```
 
 We need to create an appropriate DateTime column from a combination of the Time column headers and the filename. 
 
-```{r I_94_WB_TT add_DateTime}
-I_94_WB_TT_melt <-  I_94_WB_TT_melt %>%
+```{r WB_494_TT_melt add_DateTime}
+WB_494_TT_melt <-  WB_494_TT_melt %>%
   
   ##we create a true datetime by merging the first day in the filename with the time from the column header.
   ##we make ensure it is a POSIX datetime format. 
-  mutate(DateTime = as.POSIXct(paste(substr(gsub(".*\\_(.*)-.*","\\1",filename),1,8),
+  mutate(DateTime = as.POSIXct(paste(substr(gsub(".*\\_(.*)-.*","\\1",Filename),1,8),
                                      str_sub(Time,-8,-1)),
-                                     format="%Y%m%d %H:%M:%S"))
+                                     format="%Y%m%d %H_%M_%S"))
   
 ```
 
 We don't need the Average column so we remove.
 
-```{r I_94_WB_TT remove_unneeded_fields}
+```{r WB_494_TT_melt remove_unneeded_fields}
 
 ##drop the no longer needed columns.
-I_94_WB_TT_melt <- I_94_WB_TT_melt %>% select(-c(Average)) 
+WB_494_TT_melt <- WB_494_TT_melt %>% select(-c(Average)) 
 
 ##show the top of the dataset.
-head(I_94_WB_TT_melt)[1:5,1:length(I_94_WB_TT_melt)]  
+head(WB_494_TT_melt)[1:5,1:length(WB_494_TT_melt)]  
 
 
 ```
@@ -373,16 +375,16 @@ table(is.na(I_94_WB_TT_melt$Measure))
 
 ## VMT
 
-###VMT I-94 Westbound
+###VMT 494 Westbound
 
 
 Each file is for a specific day, with the file name giving the actual day. 
 
 Below we will investigate one of the files (top 5 rows, first 5 columns):
 
-```{r I_94_WB_VMT read_VMT_bind,warning=FALSE,echo=FALSE,include=FALSE}
+```{r WB_494_VMT read_VMT_bind,warning=FALSE,echo=FALSE,include=FALSE}
 ### set the path for the I-94 EB data.
-path<-'./TICAS/I-94 WB'
+path <- './494 WB/VMT'
 
 ### list out all the csv files that start with TT_ and then have a number. This will avoid loading in the aggregated files.
 list_csv <- dir(path=path,pattern = '^VMT_\\d.')
@@ -393,55 +395,54 @@ myfiles <- lapply(paste(path,'/',list_csv,sep=''),function(x)read.csv(x,header =
 
 ## we not add a column to each list element for the corresponding filenames we loaded. 
 ##This will be used to create a true datetime attribute.
-files <- mapply(cbind,myfiles,'filename' = list_csv,SIMPLIFY = F)
+files <- mapply(cbind,myfiles,'Filename' = list_csv,SIMPLIFY = F)
 
 ## bind all the elements of the list together.
-I_94_WB_VMT <- bind_rows(files)
+WB_494_VMT_data <- bind_rows(files)
 
 ## we need to get rid of the symbol in the station name column and turn it to NA.
-symbol <- I_94_WB_VMT$V1[4]
+symbol <- WB_494_VMT_data$V1[4]
 
-I_94_WB_VMT$V1[I_94_WB_VMT$V1==symbol] <- NA
+WB_494_VMT_data$V1[WB_494_VMT_data$V1==symbol] <- NA
 
 
 ```
 
 We now clean the dataset and assign appropriate column names. 
 
-```{r I_94_WB_VMT  clean_mutate}
+```{r WB_494_VMT_data  clean_mutate}
 
+colnames(WB_494_VMT_data) <- WB_494_VMT_data[1,]
+colnames(WB_494_VMT_data)[1] <- "STN_Name"
 
-### Give the dataset the column name from the first row. This is only temporary.
-colnames(I_94_WB_VMT) <- I_94_WB_VMT[1,]
-colnames(I_94_WB_VMT)[1] <- "STN_Name"
-colnames(I_94_WB_VMT)[291] <- 'filename'
-colnames(I_94_WB_VMT) <-trimws(colnames(I_94_WB_VMT))
+##The last column will be the filenames
+colnames(WB_494_VMT_data)[length(WB_494_VMT_data)] <- 'Filename'
 
+#remove leading and trailing spaces in the column names. 
+colnames(WB_494_VMT_data) <-trimws(colnames(WB_494_VMT_data))
+colnames(WB_494_VMT_data) <- str_replace_all(colnames(WB_494_VMT_data),"[[:punct:]|\\s]+","_")
 
 ##remove the first row as it has now been transferred to the column names. 
-I_94_WB_VMT <- I_94_WB_VMT[-1,]
+WB_494_VMT_data <- WB_494_VMT_data[-1,]
 
 ## use dplyr piping to:
-I_94_WB_VMT <-  I_94_WB_VMT %>%
+WB_494_VMT <-  WB_494_VMT_data %>%
+  ##remove all of the headers that we ignored and that were read in orginially. These are identified by the rows which contain Accumulated Distance, an initial header name. 
+  filter(Accumulated_Distance != " Accumulated Distance")%>%
   
-  ##remove all of the headers that were read in orginially
-  filter(I_94_WB_VMT$`Accumulated Distance` != " Accumulated Distance")%>%
-  
-  ##Create new fields:
-  ###fill in the blank rows with the previous name
-  mutate(Name = paste(na.locf(STN_Name,na.rm=F),`Accumulated Distance`,seq=''),
-         ###extract the station name from each row. The station name is included in parenthesis. 
-         STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
-         STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
-         ## get the total lane number from the end of the station string.
-         Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
+##Create new fields:
+###fill in the blank Station Name rows with the previous name and concatentate the accumulated Distance. 
+mutate(Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
+       ##extract the station name from each row. The station name is included in parenthesis. 
+       STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
+       STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
+       ## get the total lane number from the end of the station string.
+       Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
   ##move the new columns to the front of the dataset
-  select(Name,STN,STN_Name,STN_ID,Lane,filename,everything())%>%
-  ##remove total row
-  filter(!grepl('Total',Name))
+  select(Name,STN,STN_Name,STN_ID,Lane,Filename,everything())
   
 ###change the end of the day to 24:00 so it goes to the start of the next day
-colnames(I_94_WB_VMT) <- sub('00:00:00$','24:00:00',colnames(I_94_WB_VMT))
+colnames(WB_494_VMT) <- sub('00:00:00$','24:00:00',colnames(WB_494_VMT))
   
   
 
@@ -449,30 +450,30 @@ colnames(I_94_WB_VMT) <- sub('00:00:00$','24:00:00',colnames(I_94_WB_VMT))
 
 The dataset is still in the wide format:
 
-```{r I_94_WB_VMT check_dataset}
+```{r WB_494_VMT check_dataset}
 
-head(I_94_WB_VMT[1:5,1:10])
-table(I_94_WB_VMT$`Accumulated Distance` == "Accumulated Distance")
+head(WB_494_VMT[1:5,1:10])
+table(WB_494_VMT$Accumulated_Distance == "Accumulated Distance")
 ```
 
 Lets turn get a Time and Travel Time field effectively turning the dataset into the 'long format'. 
 
 The melt function from reshape2 works well for this purpose.
 
-```{r I_94_WB_VMT melt_I94_WB}
-I_94_WB_VMT_melt <- melt(I_94_WB_VMT,id.vars = c(1:7),variable.name = "Time",value.name = 'VMT')
-head(I_94_WB_VMT_melt)
+```{r WB_494_VMT melt_I94_WB}
+WB_494_VMT_melt <- melt(WB_494_VMT,id.vars = c(1:7),variable.name = "Time",value.name = 'VMT')
+head(WB_494_VMT_melt)
 ```
 We need to create an appropriate DateTime column from a combination of the Time column headers and the filename. 
 
-```{r I_94_WB_VMT add_DateTime}
-I_94_WB_VMT_melt <-  I_94_WB_VMT_melt %>%
+```{r WB_494_VMT_melt add_DateTime}
+WB_494_VMT_melt <-  WB_494_VMT_melt %>%
   
   ##we create a true datetime by merging the first day in the filename with the time from the column header.
   ##we make ensure it is a POSIX datetime format. 
-  mutate(DateTime = as.POSIXct(paste(substr(gsub(".*\\_(.*)-.*","\\1",filename),1,8),
+  mutate(DateTime = as.POSIXct(paste(substr(gsub(".*\\_(.*)-.*","\\1",Filename),1,8),
                                      str_sub(Time,-8,-1)),
-                                     format="%Y%m%d %H:%M:%S"))
+                                     format="%Y%m%d %H_%M_%S"))
   
 ```
 
@@ -499,12 +500,12 @@ table(is.na(I_94_WB_VMT_melt$Measure))
 
 
 
-###VMT I-94 Eastbound
+###VMT 494 Eastbound
 
 
-```{r I_94_EB_VMT read_VMT_bind,warning=FALSE,echo=FALSE,include=FALSE}
+```{r EB_494_VMT read_VMT_bind,warning=FALSE,echo=FALSE,include=FALSE}
 ### set the path for the I-94 EB data.
-path<-'./TICAS/I-94 EB'
+path <- './494 EB/VMT'
 
 ### list out all the csv files that start with TT_ and then have a number. This will avoid loading in the aggregated files.
 list_csv <- dir(path=path,pattern = '^VMT_\\d.')
@@ -518,83 +519,82 @@ myfiles <- lapply(paste(path,'/',list_csv,sep=''),function(x)read.csv(x,header =
 files <- mapply(cbind,myfiles,'filename' = list_csv,SIMPLIFY = F)
 
 ## bind all the elements of the list together.
-I_94_EB_VMT <- bind_rows(files)
+EB_494_VMT_data <- bind_rows(files)
 
 ## we need to get rid of the symbol in the station name column and turn it to NA.
-symbol <- I_94_EB_VMT$V1[4]
+symbol <- EB_494_VMT_data$V1[4]
 
-I_94_EB_VMT$V1[I_94_EB_VMT$V1==symbol] <- NA
+EB_494_VMT_data$V1[EB_494_VMT_data$V1==symbol] <- NA
 
-x <- I_94_EB_VMT
 ```
 
 We now clean the dataset and assign appropriate column names. 
 
-```{r I_94_EB_VMT clean_mutate}
-###I_94_EB_VMT <- x
+```{r EB_494_VMT clean_mutate}
 
-### Give the dataset the column name from the first row. This is only temporary.
-colnames(I_94_EB_VMT) <- I_94_EB_VMT[1,]
-colnames(I_94_EB_VMT)[1] <- "STN_Name"
-colnames(I_94_EB_VMT)[291] <- 'filename'
-colnames(I_94_EB_VMT) <-trimws(colnames(I_94_EB_VMT))
+colnames(EB_494_VMT_data) <- EB_494_VMT_data[1,]
+colnames(EB_494_VMT_data)[1] <- "STN_Name"
 
+##The last column will be the filenames
+colnames(EB_494_VMT_data)[length(EB_494_VMT_data)] <- 'Filename'
+
+#remove leading and trailing spaces in the column names. 
+colnames(EB_494_VMT_data) <-trimws(colnames(EB_494_VMT_data))
+colnames(EB_494_VMT_data) <- str_replace_all(colnames(EB_494_VMT_data),"[[:punct:]|\\s]+","_")
 
 ##remove the first row as it has now been transferred to the column names. 
-I_94_EB_VMT <- I_94_EB_VMT[-1,]
+EB_494_VMT_data <- EB_494_VMT_data[-1,]
 
 ## use dplyr piping to:
-I_94_EB_VMT <-  I_94_EB_VMT %>%
+EB_494_VMT <-  EB_494_VMT_data %>%
+  ##remove all of the headers that we ignored and that were read in orginially. These are identified by the rows which contain Accumulated Distance, an initial header name. 
+  filter(Accumulated_Distance != " Accumulated Distance")%>%
   
-  ##remove all of the headers that were read in orginially
-  filter(I_94_EB_VMT$`Accumulated Distance` != " Accumulated Distance")%>%
-  
-  ##Create new fields:
-  ###fill in the blank rows with the previous name
-  mutate(Name = paste(na.locf(STN_Name,na.rm=F),`Accumulated Distance`,seq=''),
-         ###extract the station name from each row. The station name is included in parenthesis. 
-         STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
-         STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
-         ## get the total lane number from the end of the station string.
-         Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
+##Create new fields:
+###fill in the blank Station Name rows with the previous name and concatentate the accumulated Distance. 
+mutate(Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
+       ##extract the station name from each row. The station name is included in parenthesis. 
+       STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
+       STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
+       ## get the total lane number from the end of the station string.
+       Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
   ##move the new columns to the front of the dataset
-  select(Name,STN,STN_Name,STN_ID,Lane,filename,everything())%>%
-  ##remove total row
-  filter(!grepl('Total',Name))
-
-
+  select(Name,STN,STN_Name,STN_ID,Lane,Filename,everything())
+  
 ###change the end of the day to 24:00 so it goes to the start of the next day
-colnames(I_94_EB_VMT) <- sub('00:00:00$','24:00:00',colnames(I_94_EB_VMT))
+colnames(EB_494_VMT) <- sub('00:00:00$','24:00:00',colnames(EB_494_VMT))
 
 ```
 
 The dataset is still in the wide format:
 
-```{r I_94_EB_VMT check_dataset}
+```{r EB_494_VMT check_dataset}
 
-head(I_94_EB_VMT[1:5,1:10])
-table(I_94_EB_VMT$`Accumulated Distance` == "Accumulated Distance")
+head(EB_494_VMT[1:5,1:10])
+table(EB_494_VMT$Accumulated_Distance == "Accumulated Distance")
 ```
 
 Lets turn get a Time and Travel Time field effectively turning the dataset into the 'long format'. 
 
 The melt function from reshape2 works well for this purpose.
 
-```{r I_94_EB_VMT melt_I94_WB}
-I_94_EB_VMT_melt <- melt(I_94_EB_VMT,id.vars = c(1:7),variable.name = "Time",value.name = 'VMT')
-head(I_94_EB_VMT_melt)
+```{r EB_494_VMT melt 494_EB}
+
+EB_494_VMT_melt <- melt(EB_494_VMT,id.vars = c(1:7),variable.name = "Time",value.name = 'VMT')
+
+head(EB_494_VMT_melt)
 ```
 
 We need to create an appropriate DateTime column from a combination of the Time column headers and the filename. 
 
-```{r I_94_EB_VMT add_DateTime}
-I_94_EB_VMT_melt <-  I_94_EB_VMT_melt %>%
+```{r EB_494_VMT_melt add_DateTime}
+EB_494_VMT_melt <-  EB_494_VMT_melt %>%
   
   ##we create a true datetime by merging the first day in the filename with the time from the column header.
   ##we make ensure it is a POSIX datetime format. 
-  mutate(DateTime = as.POSIXct(paste(substr(gsub(".*\\_(.*)-.*","\\1",filename),1,8),
+  mutate(DateTime = as.POSIXct(paste(substr(gsub(".*\\_(.*)-.*","\\1",Filename),1,8),
                                      str_sub(Time,-8,-1)),
-                                     format="%Y%m%d %H:%M:%S"))
+                                     format="%Y%m%d %H_%M_%S"))
   
 ```
 
@@ -885,30 +885,72 @@ return(merge_data)
 
 We create a vector of 15 min bins for 2015.
 
-```{r 15_minute_seq_2015}
+```{r 15_minute_seq_2017}
 
-seq_15min_2015 <- data.frame(DateTime=seq(as.POSIXct("2015,01,01",format="%Y,%m,%d"),
-                                          as.POSIXct("2016,01,01",format="%Y,%m,%d"),by="15 min"))
-seq_15min_2015$lag <- lag(seq_15min_2015$DateTime,1)
+seq_15min_2017 <- data.frame(DateTime=seq(as.POSIXct("2017,01,01",format="%Y,%m,%d"),
+                                          as.POSIXct("2018,01,01",format="%Y,%m,%d"),by="15 min"))
+seq_15min_2017$lag <- lag(seq_15min_2015$DateTime,1)
 ```
 
 
+
+### Crash aggregating functions
+
+```{r MNCMAT}
+
+MNCMAT <- function(Start,End,Direction,Crash_data,Time_seq) {
+  
+  merge_data <- Time_seq
+  
+  MNCMAT <- Crash_data %>% 
+    filter(Measure_Round >= Start & Measure_Round <= End & Direction ==  Direction) %>% 
+    as.data.frame()
+  
+  merge_data$crash1 <- sapply(merge_data$DateTime,
+                              function(x) any(x < MNCMAT$EndDateTime & x > MNCMAT$DateTime))
+  
+  merge_data$crash2 <- sapply(merge_data$lag,
+                              function(x) any(x < MNCMAT$EndDateTime & x > MNCMAT$DateTime))
+  
+  merge_data$MNCMAT <- ifelse(merge_data$crash1==TRUE | merge_data$crash2==TRUE,TRUE,FALSE)
+  
+  return(merge_data)
+}
+
+```
+
+### Weather aggregating function
+
+```{r Weather}
+
+weather <- function(weather_data,Time_seq){
+  
+  merge_data <- Time_seq
+  
+  merge_data$weather1 <- sapply(merge_data$DateTime,
+                                function(x) any(x < weather_data$End_Time &
+                                                                     x > weather_data$Starting_Time))
+  
+  merge_data$weather2 <- sapply(merge_data$cut_floor.x,
+                               function(x) any(x < weather_data$End_Time & 
+                                                                        x > weather_data$Starting_Time))
+  
+  merge_data$weather <- ifelse(merge_data$weather2==TRUE | S_1_merge$weather1==TRUE,1,0) 
+  
+  return(merge_data)
+}
+```
 
 ### S_1 TH_252_SouthBound MP 3.55 - MP 1.95
 
-```{r S_1}
-S_1_merge <- seq_15min_2015
-
-```
 
 Does the 15 minute time bin coincide with any MNCMAT events?
 
-```{r S_1_MNCMAT}
-S_1_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=0.00 &Measure_Round<=1.95 & Direction =='252S') %>% as.data.frame()
 
-S_1_merge$crash1 <- sapply(S_1_merge$DateTime, function(x) any(x < S_1_MNCMAT$EndDateTime & x > S_1_MNCMAT$DateTime))
-S_1_merge$crash2 <- sapply(S_1_merge$lag, function(x) any(x < S_1_MNCMAT$EndDateTime & x > S_1_MNCMAT$DateTime))
-S_1_merge$MNCMAT <- ifelse(S_1_merge$crash1==TRUE | S_1_merge$crash2==TRUE,TRUE,FALSE)
+
+
+```{r}
+b <- MNCMAT(Start = 0.00,End = 1.95,Direction = '252S',Crash_data = MNCMAT_final,Time_seq = seq_15min_2015)
 ```
 
 There is no IRIS data for TH 252.
@@ -920,13 +962,11 @@ S_1_merge$Crash <- if_else(S_1_merge$MNCMAT==TRUE,1,0)
 
 Does the 15 minute time bin coincide with any weather events?
 
-```{r S_1_Weather}
-S_1_merge$weather1 <- sapply(S_1_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
-                                                                   x > weather_MSP$Starting_Time))
-S_1_merge$weather2 <- sapply(S_1_merge$cut_floor.x, function(x) any(x < weather_MSP$End_Time & 
-                                                                      x > weather_MSP$Starting_Time))
-S_1_merge$weather <- ifelse(S_1_merge$weather2==TRUE | S_1_merge$weather1==TRUE,1,0) 
+```{r}
+r <- weather(weather_data = weather_MSP,Time_seq = seq_15min_2015)
 ```
+
+
 
 ```{r S_1_final}
 S_1_final <- S_1_merge %>% select(DateTime,weather,Crash)
