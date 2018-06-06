@@ -13,7 +13,8 @@ library(gridExtra)
 library(reshape2)
 library(zoo)
 library(rgdal)
-
+library(leaflet)
+library(stringr)
 ```
 
 
@@ -46,7 +47,7 @@ fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
 Station <- as.data.frame(readOGR(dsn=fgdb,layer="Station"))
 
 ##filter all stations that have been Linear Referenced.
-Station <- Station[!is.na(Station$Measure),]
+Station <- Station[!is.na(Station$Measure) & Station$Roadway == 'I-494',] %>% droplevels()
 
 ###Some exploration on the Station Dataset.
 head(Station)
@@ -136,10 +137,12 @@ EB_494_TT_data <- EB_494_TT_data[-1,]
 EB_494_TT <-  EB_494_TT_data %>%
   ##remove all of the headers that we ignored and that were read in orginially. These are identified by the rows which contain Accumulated Distance, an initial header name. 
   filter(Accumulated_Distance != " Accumulated Distance")%>%
+
   
 ##Create new fields:
 ###fill in the blank Station Name rows with the previous name and concatentate the accumulated Distance. 
-mutate(Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
+mutate(Accumulated_Distance = as.numeric(trimws(Accumulated_Distance)),
+       Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
        ##extract the station name from each row. The station name is included in parenthesis. 
        STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
        STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
@@ -147,10 +150,10 @@ mutate(Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
        Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
   ##move the new columns to the front of the dataset
   select(Name,STN,STN_Name,STN_ID,Lane,Filename,Average,everything())
-  
+
 ###change the end of the day to 24:00 so it goes to the start of the next day
 colnames(EB_494_TT) <- sub('00:00:00$','24:00:00',colnames(EB_494_TT))
-  
+
 
 ```
 
@@ -206,18 +209,18 @@ The Measure field created by Linear Referencing has alot of significant digits. 
 ```{r EB_494_TT_melt join_Measure_round}
 
 ##perform a join on our I_94_EB_TT_melt dataset with the Station table to get the Measure values for each station. 
-I_94_EB_TT_melt <- merge(I_94_EB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )%>%arrange(DateTime)
+EB_494_TT_melt <- merge(EB_494_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )%>%arrange(DateTime)
 
 ###TT field was read in intially as a character field. change to numneric.
-I_94_EB_TT_melt$TT <- as.numeric(I_94_EB_TT_melt$TT)
+EB_494_TT_melt$TT <- as.numeric(EB_494_TT_melt$TT)
 
 ##look at the top of the merged dataset
-head(I_94_EB_TT_melt,n=15)
+head(EB_494_TT_melt,n=15)
 
-tail(I_94_EB_TT_melt,n=15)
+tail(EB_494_TT_melt,n=15)
 
 ##check if there were any location with no matches
-print(table(is.na(I_94_EB_TT_melt$Measure)))
+print(table(is.na(EB_494_TT_melt$Measure)))
 
 ```
 
@@ -238,7 +241,7 @@ Below we will investigate one of the files (top 5 rows, first 5 columns):
 
 ```{r WB_494_TT  read_bind,warning=FALSE,echo=FALSE,include=FALSE}
 ### set the path for the I-94 EB data.
-path <- './494 EB/TT'
+path <- './494 WB/TT'
 
 ### list out all the csv files that start with TT_ and then have a number. This will avoid loading in the aggregated files.
 list_csv <- dir(path=path,pattern = '^TT_\\d.')
@@ -286,7 +289,8 @@ WB_494_TT <-  WB_494_TT_data %>%
   
 ##Create new fields:
 ###fill in the blank Station Name rows with the previous name and concatentate the accumulated Distance. 
-mutate(Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
+mutate(Accumulated_Distance = as.numeric(trimws(Accumulated_Distance)),
+       Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
        ##extract the station name from each row. The station name is included in parenthesis. 
        STN = gsub(".*\\((.*)\\).*","\\1",STN_Name),
        STN_ID = gsub(".*\\((.*)\\).*","\\1",Name),
@@ -354,17 +358,17 @@ The Measure field created by Linear Referencing has alot of significant digits. 
 ```{r I_94_WB_TT join_Measure_round}
 
 ##perform a join on our I_94_WB_TT_melt dataset with the Station table to get the Measure values for each station. 
-I_94_WB_TT_melt <- merge(I_94_WB_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
+WB_494_TT_melt <- merge(WB_494_TT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
 
-I_94_WB_TT_melt$TT <- as.numeric(I_94_WB_TT_melt$TT)
+WB_494_TT_melt$TT <- as.numeric(WB_494_TT_melt$TT)
 
 ##look at the top of the merged dataset
-head(I_94_WB_TT_melt,n=50)
+head(WB_494_TT_melt,n=50)
 
-tail(I_94_WB_TT_melt,n=15)
+tail(WB_494_TT_melt,n=15)
 
 ##check if there were any location with no matches
-table(is.na(I_94_WB_TT_melt$Measure))
+table(is.na(WB_494_TT_melt$Measure))
 
 ```
 
@@ -439,7 +443,8 @@ mutate(Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
        ## get the total lane number from the end of the station string.
        Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
   ##move the new columns to the front of the dataset
-  select(Name,STN,STN_Name,STN_ID,Lane,Filename,everything())
+  select(Name,STN,STN_Name,STN_ID,Lane,Filename,everything()) %>%
+  filter(STN_ID != "Total  0 ")
   
 ###change the end of the day to 24:00 so it goes to the start of the next day
 colnames(WB_494_VMT) <- sub('00:00:00$','24:00:00',colnames(WB_494_VMT))
@@ -484,17 +489,17 @@ The Measure field created by Linear Referencing has alot of significant digits. 
 ```{r I_94_WB_VMT join_Measure_round}
 
 ##perform a join on our I_94_WB_VMT_melt dataset with the Station table to get the Measure values for each station. 
-I_94_WB_VMT_melt <- merge(I_94_WB_VMT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
+WB_494_VMT_melt <- merge(WB_494_VMT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
 
-I_94_WB_VMT_melt$VMT <- as.numeric(I_94_WB_VMT_melt$VMT)
+WB_494_VMT_melt$VMT <- as.numeric(WB_494_VMT_melt$VMT)
 
 ##look at the top of the merged dataset
-head(I_94_WB_VMT_melt,n=50)
+head(WB_494_VMT_melt,n=50)
 
-tail(I_94_WB_VMT_melt,n=15)
+tail(WB_494_VMT_melt,n=15)
 
 ##check if there were any location with no matches
-table(is.na(I_94_WB_VMT_melt$Measure))
+table(is.na(WB_494_VMT_melt$Measure_Round))
 
 ```
 
@@ -559,7 +564,8 @@ mutate(Name = paste(na.locf(STN_Name,na.rm=F),Accumulated_Distance,seq=''),
        ## get the total lane number from the end of the station string.
        Lane = as.numeric(gsub(".*\\) ([^.]).*","\\1",Name)))%>%
   ##move the new columns to the front of the dataset
-  select(Name,STN,STN_Name,STN_ID,Lane,Filename,everything())
+  select(Name,STN,STN_Name,STN_ID,Lane,Filename,everything())%>%
+  filter(STN_ID != "Total  0 ")
   
 ###change the end of the day to 24:00 so it goes to the start of the next day
 colnames(EB_494_VMT) <- sub('00:00:00$','24:00:00',colnames(EB_494_VMT))
@@ -606,18 +612,18 @@ The Measure field created by Linear Referencing has alot of significant digits. 
 ```{r I_94_EB_VMT join_Measure_round}
 
 ##perform a join on our I_94_EB_VMT_melt dataset with the Station table to get the Measure values for each station. 
-I_94_EB_VMT_melt <- merge(I_94_EB_VMT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
+EB_494_VMT_melt <- merge(EB_494_VMT_melt, Station[,c("Station", "Measure_Round")], by.x= "STN_ID", by.y="Station",all.x=TRUE )
 
-I_94_EB_VMT_melt$VMT <- as.numeric(I_94_EB_VMT_melt$VMT)
+EB_494_VMT_melt$VMT <- as.numeric(EB_494_VMT_melt$VMT)
 
 
 ##look at the top of the merged dataset
-head(I_94_EB_VMT_melt,n=50)
+head(EB_494_VMT_melt,n=50)
 
-tail(I_94_EB_VMT_melt,n=15)
+tail(EB_494_VMT_melt,n=15)
 
 ##check if there were any location with no matches
-table(is.na(I_94_EB_VMT_melt$Measure))
+table(is.na(EB_494_VMT_melt$Measure))
 
 ```
 
@@ -630,61 +636,63 @@ Read the data from ArcMAP Geodatabase. There is a Measure_Round field that conta
 
 ```{r read_MNCMAT_dataset_from_ARCMAP}
 fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
-MNCMAT <- as.data.frame(readOGR(dsn=fgdb,layer="MNCMAT"))
+
+subset(ogrDrivers(), grepl("GDB", name))
+
+fc_list = ogrListLayers(fgdb)
+
+print(fc_list)
+
+MNCMAT <- as.data.frame(readOGR(dsn=fgdb,layer="MNCMAT_2017")) %>% droplevels()
+MNCMAT <- MNCMAT[!is.na(MNCMAT$Measure),] %>% droplevels()
 ```
 
 Create a date time field by combined the Month, Day, Year and Time fields. 
 
 ```{r create_DateTime}
 
-MNCMAT$Time <- if_else(MNCMAT$Time<60,paste('00',MNCMAT$Time,sep = ''),if_else(MNCMAT$Time<10,paste('000',MNCMAT$Time,sep = ''),as.character(MNCMAT$Time)))
+# MNCMAT$Time <- if_else(MNCMAT$Time<60,paste('00',MNCMAT$Time,sep = ''),if_else(MNCMAT$Time<10,paste('000',MNCMAT$Time,sep = ''),as.character(MNCMAT$Time)))
+# 
+# MNCMAT$DateTime <- as.POSIXct(paste(MNCMAT$Year,'/',
+#                                     MNCMAT$Month,'/',
+#                                     MNCMAT$Day,' ',
+#                                     ##not all times are formatted as 0524. 0524 is listed as 524.
+#                                     ##use str_sub to extract the correct pars of time
+#                                     str_sub(MNCMAT$Time,end=-3),':',
+#                                     str_sub(MNCMAT$Time,-2,-1), sep=''),format='%Y/%m/%d %H:%M')
 
-MNCMAT$DateTime <- as.POSIXct(paste(MNCMAT$Year,'/',
-                                    MNCMAT$Month,'/',
-                                    MNCMAT$Day,' ',
-                                    ##not all times are formatted as 0524. 0524 is listed as 524.
-                                    ##use str_sub to extract the correct pars of time
-                                    str_sub(MNCMAT$Time,end=-3),':',
-                                    str_sub(MNCMAT$Time,-2,-1), sep=''),format='%Y/%m/%d %H:%M')
+
+MNCMAT$DateTime <- as.POSIXct(MNCMAT$DATE_TIME,format = "%Y/%m/%d %H:%M:%S")
+
 
 ##ensure that all date were formatted correctly. We should have no NAs.
 table(is.na(MNCMAT$DateTime))
 ```
 
-We have two NA remaining in the DateTime field. 
 
-```{r check_NAs}
-MNCMAT[is.na(MNCMAT$DateTime),c("Month","Day","Time","Year","DateTime")]
-```
-
-The Time values of 9998 are clearly in error and we will omit these records. 
-We will also filter out the values with no Measure_Round value. These values are not in the scope of this project. 
-
-```{r remove_NAs}
+```{r arrange datetime}
 MNCMAT_final <- MNCMAT %>% 
-    filter(!is.na(DateTime))%>%
-           filter(!is.na(Measure_Round))%>%
   arrange(DateTime)
 ```
 
 
 Create a duration for each incident.
 
-K: Fatal                      180 mins
-A: Incapacitating Injury      90 mins
-B: Non-Incapacitating Injury  45 mins
-C: Possible Injury            30 mins
-N: Property Damage            30 mins
-X: Unknown                    30 mins
+0: Fatal                      180 mins
+1: Incapacitating Injury      90 mins
+2: Non-Incapacitating Injury  45 mins
+3: Possible Injury            30 mins
+4: Property Damage            30 mins
+5: Unknown                    30 mins
 
 
 ```{r assign_duration}
-MNCMAT_final$EndDateTime <- if_else(MNCMAT_final$Sev == 'A',MNCMAT_final$DateTime+90*60,
-                             if_else(MNCMAT_final$Sev == 'B',MNCMAT_final$DateTime+45*60,
-                             if_else(MNCMAT_final$Sev == 'C',MNCMAT_final$DateTime+30*60,
-                             if_else(MNCMAT_final$Sev == 'N',MNCMAT_final$DateTime+30*60,
-                             if_else(MNCMAT_final$Sev == 'K',MNCMAT_final$DateTime+180*60,
-                              if_else(MNCMAT_final$Sev == 'X',MNCMAT_final$DateTime+30*60,
+MNCMAT_final$EndDateTime <- if_else(MNCMAT_final$SEV == 0,MNCMAT_final$DateTime+18*60,
+                             if_else(MNCMAT_final$SEV == 1,MNCMAT_final$DateTime+90*60,
+                             if_else(MNCMAT_final$SEV == 2,MNCMAT_final$DateTime+45*60,
+                             if_else(MNCMAT_final$SEV == 3,MNCMAT_final$DateTime+30*60,
+                             if_else(MNCMAT_final$SEV == 4,MNCMAT_final$DateTime+30*60,
+                              if_else(MNCMAT_final$SEV == 5,MNCMAT_final$DateTime+30*60,
                                      MNCMAT_final$DateTime))))))
 
 MNCMAT_final$interval <- interval(MNCMAT_final$DateTime,MNCMAT_final$EndDateTime)
@@ -699,73 +707,49 @@ Read the data from ArcMAP Geodatabase. There is a Measure_Round field that conta
 
 ```{r read_IRIS_dataset_from_ARCMAP}
 fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
-IRIS_2015 <- as.data.frame(readOGR(dsn=fgdb,layer="IRIS_2015"))
+IRIS_2017 <- as.data.frame(readOGR(dsn=fgdb,layer="IRIS_2017"))
 ```
 
-Create a DateTime field.
-
-```{r IRIS create_DateTime}
-
-IRIS_2015$DateTime <- as.POSIXct(IRIS_2015$event_date,format='%Y-%m-%d %H:%M:%S')
-
-table(is.na(IRIS_2015$DateTime))
+```{r IRIS}
+y <-  read.csv('H:/Projects/11000/11155/TraffStudy/Reliability/Crash Data/IRIS Incidents 2017 (494 Confirmed).csv')
+IRIS_2017 <- cbind(IRIS_2017,y) 
+IRIS_2017 <- IRIS_2017 %>% select(colnames(IRIS_2017)[1:17])
+colnames(IRIS_2017)[16:17] <- c('Start_Time', 'End_Time')
+IRIS_2017 <- IRIS_2017[,-c(1,2)]
 ```
 
-Investigate the NA DateTime value.
-
-```{r IRIS look_at_NA}
-IRIS_2015[is.na(IRIS_2015$DateTime),]
-```
-
-The row appears to be blank so will remove the record.
-
-```{r IRIS remove_NA}
-IRIS_2015 <- IRIS_2015[!is.na(IRIS_2015$DateTime),]
-```
-
-We will group by event_id and return the min and max time for each event ID. This will provide us with the time interval for each incident. 
-
-```{r aggregate_by_event_name}
-
-IRIS_2015_event <- IRIS_2015 %>% 
-  mutate(Descr = as.factor(word(IRIS_2015$descriptio,-1)))%>%
-  select(-descriptio,everything())%>%
-  group_by(name,Descr)%>%
-  summarise(Min_DateTime = min(DateTime),
-            Max_DateTime = max(DateTime),
-            Road = first(road),
-            Measure_Round = min(Measure_Round),
-            Direction = first(direction),
-            Dup = any(duplicated(lat)))%>%
-  filter(!is.na(Measure_Round))%>%
-
-  ##tibble (dplyr dataframe type) do not like storing interval column.
-  as.data.frame()
-
-
-head(IRIS_2015_event)
-table(IRIS_2015_event$Road %>% droplevels())
-table(IRIS_2015_event$Direction %>% droplevels())
-```
-
-We now have a start and end time, Direction and Road for each event.
 
 
 ##Weather 2015
 
 Read the already processed weather data.
 
-```{r}
-
-weather_MSP <- as.data.frame(readxl::read_xlsx('./Weather/MSP_Weather_2015.xlsx',sheet = 'export3_2015'))
+```{r weather}
+dir()
+weather_MSP <- as.data.frame(readxl::read_xlsx('./Weather/Weather Data 2017.xlsx',sheet = 'Sheet7'))
 colnames(weather_MSP) <- trimws(colnames(weather_MSP))
 colnames(weather_MSP) <- gsub('([[:punct:]])|\\s+','_',colnames(weather_MSP))
 
 ###read::xlsx brings in time in UTC. change to us/central
-weather_MSP$Starting_Time <- as.POSIXct(format(weather_MSP$Starting_Time),tz='US/Central')
+weather_MSP$Start_Time <- as.POSIXct(format(weather_MSP$Start_Time),tz='US/Central')
 weather_MSP$End_Time <- as.POSIXct(format(weather_MSP$End_Time),tz='US/Central')
 ```
 
+
+
+
+## Show Data
+
+```{r leaflet}
+
+dat <- Station %>%
+  filter(Direction == "WB")
+m <- leaflet() %>%
+  addTiles() %>%
+  addMarkers(lng = dat$Longitude, lat = dat$Latitude,
+             label = paste(dat$Direction, dat$Station,', MP: ', dat$Measure_Round,sep = ''))
+m
+```
 
 
 ##Filter Combine Segments
@@ -775,11 +759,29 @@ weather_MSP$End_Time <- as.POSIXct(format(weather_MSP$End_Time),tz='US/Central')
 ## we linear referenced the segment designations. This table will not be used and is only for reference. n
 ##load segment data
 fgdb <- "C:/Users/dgallen/Desktop/Geos/MN Detectors/Congestion.gdb"
-Seg <- as.data.frame(readOGR(dsn=fgdb,layer="Segments"))
+
+subset(ogrDrivers(), grepl("GDB", name))
+
+fc_list = ogrListLayers(fgdb)
+
+print(fc_list)
+
+Seg <- as.data.frame(readOGR(dsn=fgdb,layer="segment_494"))
 print(Seg)
 ```
 
-###TT and VMT aggregating functions
+### Time Sequence
+
+We create a vector of 15 min bins for 2017.
+
+```{r 15_minute_seq_2017}
+
+seq_15min_2017 <- data.frame(DateTime=seq(as.POSIXct("2017,01,01",format="%Y,%m,%d"),
+                                          as.POSIXct("2018,01,01",format="%Y,%m,%d"),by="15 min"))
+seq_15min_2017$lag <- lag(seq_15min_2017$DateTime,1)
+```
+
+### TT and VMT aggregating functions
 
 ```{r TT_filter}
 
@@ -790,16 +792,18 @@ print(Seg)
 ##to find the final aggregated Travel Times,  the function takes the starting TT at the 'from' MP and subtracts it from the 'to' MP.
 ##the final number for the TT is the mean of all the TT in that time bin. 
 TT <- function(data,from,to,bins){
-data_from <-   data%>%
+data_from <-  data %>%
   filter(Measure_Round == from)%>%
   filter(!is.na(DateTime))%>%
   mutate(cut_ceiling=ceiling_date(DateTime,bins),
          cut_floor=floor_date(DateTime,bins))%>%
   group_by(cut_ceiling)%>%
   summarise(TT_mean_from=mean(TT),
-            cut_floor=min(cut_floor))
+            cut_floor=min(cut_floor))%>%
+  mutate(YearDay = strftime(cut_ceiling, format="%D"),
+         DayTime = strftime(cut_ceiling, format="%H:%M"))
 
-data_to <-   data%>%
+data_to <-  data %>%
   filter(Measure_Round == to)%>%
   filter(!is.na(DateTime))%>%
   mutate(cut_ceiling=ceiling_date(DateTime,bins),
@@ -822,8 +826,8 @@ return(merge_data)
 
 
 ##the VMT function loads a clean VMT dataset, filters for the segment bounds and aggregates into the time bins required.
-##to find the final Vehicular Miles travells,  the function takes the starting VMT at the 'from' MP and subtracts it from the 'to' MP.
-##the final number for the VMT is the mean of all the TT in that time bin. 
+##to find the final Vehicular Miles traveled,  the function takes the starting VMT at the 'from' MP and subtracts it from the 'to' MP.
+##the final number for the VMT is the mean of all the VMT in that time bin. 
 
 
 VMT <- function(data, from, to, bins){
@@ -883,22 +887,11 @@ return(merge_data)
 
 ```
 
-We create a vector of 15 min bins for 2015.
-
-```{r 15_minute_seq_2017}
-
-seq_15min_2017 <- data.frame(DateTime=seq(as.POSIXct("2017,01,01",format="%Y,%m,%d"),
-                                          as.POSIXct("2018,01,01",format="%Y,%m,%d"),by="15 min"))
-seq_15min_2017$lag <- lag(seq_15min_2015$DateTime,1)
-```
-
-
-
 ### Crash aggregating functions
 
 ```{r MNCMAT}
 
-MNCMAT <- function(Start,End,Direction,Crash_data,Time_seq) {
+MNCMAT_seg <- function(Start,End,Direction,Crash_data,Time_seq) {
   
   merge_data <- Time_seq
   
@@ -918,6 +911,41 @@ MNCMAT <- function(Start,End,Direction,Crash_data,Time_seq) {
 }
 
 ```
+
+```{r IRIS}
+
+IRIS_seg <- function(Start,End,Direction,Crash_data,Time_seq) {
+
+  merge_data <- Time_seq
+  
+IRIS <- Crash_data %>% filter(Measure_Round >= Start & Measure_Round <= End & Direction == Direction)
+
+##CRASH
+merge_data$IRIS_CRASH1 <- sapply(merge_data$DateTime, function(x) any(x < IRIS$Max_DateTime[IRIS$Descr=='CRASH'] & x > IRIS$Min_DateTime[IRIS$Descr=='CRASH']))
+
+merge_data$IRIS_CRASH2 <- sapply(merge_data$lag, function(x) any(x < IRIS$Max_DateTime[IRIS$Descr=='CRASH'] & x > IRIS$Min_DateTime[IRIS$Descr=='CRASH']))
+
+merge_data$CRASH <- ifelse(merge_data$IRIS_CRASH1==TRUE | merge_data$IRIS_CRASH2==TRUE,TRUE,FALSE) 
+
+###INCIDENT
+merge_data$IRIS_INCIDENT1 <- sapply(merge_data$DateTime, function(x) any(x < IRIS$Max_DateTime[IRIS$Descr=='STALL'|IRIS$Descr=='HAZARD'] & x > IRIS$Min_DateTime[IRIS$Descr=='STALL'|IRIS$Descr=='HAZARD']))
+
+merge_data$IRIS_INCIDENT2 <- sapply(merge_data$lag, function(x) any(x < IRIS$Max_DateTime[IRIS$Descr=='STALL'|IRIS$Descr=='HAZARD'] & x > IRIS$Min_DateTime[IRIS$Descr=='STALL'|IRIS$Descr=='HAZARD']))
+
+merge_data$INCIDENT <- ifelse(merge_data$IRIS_INCIDENT1==TRUE | merge_data$IRIS_INCIDENT2==TRUE,1,0) 
+
+##ROADWORK
+merge_data$IRIS_ROADWORK1 <- sapply(merge_data$DateTime, function(x) any(x < IRIS$Max_DateTime[IRIS$Descr=='ROADWORK'] & x > IRIS$Min_DateTime[IRIS$Descr=='ROADWORK']))
+
+merge_data$IRIS_ROADWORK2 <- sapply(merge_data$lag, function(x) any(x < IRIS$Max_DateTime[IRIS$Descr=='ROADWORK'] & x > IRIS$Min_DateTime[IRIS$Descr=='ROADWORK']))
+
+merge_data$ROADWORK <- ifelse(merge_data$IRIS_ROADWORK1==TRUE | merge_data$IRIS_ROADWORK2==TRUE,1,0)  
+
+return(merge_data)
+
+}
+```
+
 
 ### Weather aggregating function
 
@@ -941,30 +969,27 @@ weather <- function(weather_data,Time_seq){
 }
 ```
 
-### S_1 TH_252_SouthBound MP 3.55 - MP 1.95
-
-
-Does the 15 minute time bin coincide with any MNCMAT events?
 
 
 
+### SEG 6
 
-```{r}
-b <- MNCMAT(Start = 0.00,End = 1.95,Direction = '252S',Crash_data = MNCMAT_final,Time_seq = seq_15min_2015)
+```{r seg 6}
+
+TT6 <- TT(data = WB_494_TT_melt ,from = 1.05,to = 3.3, bins = '15 mins')
+
+TT6_wide <- TT6 %>% 
+  select(YearDay,DayTime,TT_mean) %>% 
+  dcast(DayTime ~ YearDay, value.var = 'TT_mean')
+
+TT6_mat <- as.matrix(TT6_wide[,-1])
+rownames(TT6_mat) <- TT6_wide[,1]
+
+VMT6 <- VMT(data = WB_494_VMT_melt,from = 1.05, to = 3.3, bins = '15 mins')
+
 ```
 
-There is no IRIS data for TH 252.
 
-
-```{r S_1 final_crash}
-S_1_merge$Crash <- if_else(S_1_merge$MNCMAT==TRUE,1,0)
-```
-
-Does the 15 minute time bin coincide with any weather events?
-
-```{r}
-r <- weather(weather_data = weather_MSP,Time_seq = seq_15min_2015)
-```
 
 
 
@@ -973,134 +998,6 @@ S_1_final <- S_1_merge %>% select(DateTime,weather,Crash)
 
 write.csv(S_1_final,'S_1_final.csv',na='Null',row.names = FALSE)
 ```
-
-
-### S_2 TH_252_SouthBound MP 1.95 - MP 0.00
-
-```{r S_2}
-S_2_merge <- seq_15min_2015
-
-```
-
-Does the 15 minute time bin coincide with any MNCMAT events?
-
-```{r S_2_MNCMAT}
-S_2_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=0.00 &Measure_Round<=1.95 & Direction =='252S') %>% as.data.frame()
-
-S_2_merge$crash1 <- sapply(S_2_merge$DateTime, function(x) any(x < S_2_MNCMAT$EndDateTime & x > S_2_MNCMAT$DateTime))
-S_2_merge$crash2 <- sapply(S_2_merge$lag, function(x) any(x < S_2_MNCMAT$EndDateTime & x > S_2_MNCMAT$DateTime))
-S_2_merge$MNCMAT <- ifelse(S_2_merge$crash1==TRUE | S_2_merge$crash2==TRUE,TRUE,FALSE)
-```
-
-There is no IRIS data for TH 252.
-
-
-```{r S_2 final_crash}
-S_2_merge$Crash <- if_else(S_2_merge$MNCMAT==TRUE,1,0)
-```
-
-Does the 15 minute time bin coincide with any weather events?
-
-```{r S_2_Weather}
-S_2_merge$weather1 <- sapply(S_2_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
-                                                                   x > weather_MSP$Starting_Time))
-S_2_merge$weather2 <- sapply(S_2_merge$cut_floor.x, function(x) any(x < weather_MSP$End_Time & 
-                                                                      x > weather_MSP$Starting_Time))
-S_2_merge$weather <- ifelse(S_2_merge$weather2==TRUE | S_2_merge$weather1==TRUE,1,0) 
-```
-
-```{r S_2_final}
-S_2_final <- S_2_merge %>% select(DateTime,weather,Crash)
-
-write.csv(S_2_final,'S_2_final.csv',na='Null',row.names = FALSE)
-```
-
-
-
-### N_3 TH_252_SouthBound MP 0.00 - MP 1.93
-
-```{r N_3}
-N_3_merge <- seq_15min_2015
-```
-
-Does the 15 minute time bin coincide with any MNCMAT events?
-
-```{r N_3_MNCMAT}
-N_3_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=0.00 &Measure_Round<=1.93 & Direction =='252N') %>% as.data.frame()
-
-N_3_merge$crash1 <- sapply(N_3_merge$DateTime, function(x) any(x < N_3_MNCMAT$EndDateTime & x > N_3_MNCMAT$DateTime))
-N_3_merge$crash2 <- sapply(N_3_merge$lag, function(x) any(x < N_3_MNCMAT$EndDateTime & x > N_3_MNCMAT$DateTime))
-N_3_merge$MNCMAT <- ifelse(N_3_merge$crash1==TRUE | N_3_merge$crash2==TRUE,TRUE,FALSE)
-```
-
-There is no IRIS data for TH 252.
-
-
-```{r N_3 final_crash}
-N_3_merge$Crash <- if_else(N_3_merge$MNCMAT==TRUE,1,0)
-```
-
-Does the 15 minute time bin coincide with any weather events?
-
-```{r N_3_Weather}
-N_3_merge$weather1 <- sapply(N_3_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
-                                                                   x > weather_MSP$Starting_Time))
-N_3_merge$weather2 <- sapply(N_3_merge$cut_floor.x, function(x) any(x < weather_MSP$End_Time & 
-                                                                      x > weather_MSP$Starting_Time))
-N_3_merge$weather <- ifelse(N_3_merge$weather2==TRUE | N_3_merge$weather1==TRUE,1,0) 
-```
-
-```{r N_3_final}
-N_3_final <- N_3_merge %>% select(DateTime,weather,Crash)
-
-write.csv(N_3_final,'N_3_final.csv',na='Null',row.names = FALSE)
-```
-
-
-
-### N_4 TH_252_SouthBound MP 1.93 - MP 3.62
-
-```{r N_4}
-N_4_merge <- seq_15min_2015
-```
-
-Does the 15 minute time bin coincide with any MNCMAT events?
-
-```{r N_4_MNCMAT}
-N_4_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=1.93 &Measure_Round<=3.62 & Direction =='252N') %>% as.data.frame()
-
-N_4_merge$crash1 <- sapply(N_4_merge$DateTime, function(x) any(x < N_4_MNCMAT$EndDateTime & x > N_4_MNCMAT$DateTime))
-N_4_merge$crash2 <- sapply(N_4_merge$lag, function(x) any(x < N_4_MNCMAT$EndDateTime & x > N_4_MNCMAT$DateTime))
-N_4_merge$MNCMAT <- ifelse(N_4_merge$crash1==TRUE | N_4_merge$crash2==TRUE,TRUE,FALSE)
-```
-
-There is no IRIS data for TH 252.
-
-
-```{r N_4 final_crash}
-N_4_merge$Crash <- if_else(N_4_merge$MNCMAT==TRUE,1,0)
-```
-
-Does the 15 minute time bin coincide with any weather events?
-
-```{r N_4_Weather}
-N_4_merge$weather1 <- sapply(N_4_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
-                                                                   x > weather_MSP$Starting_Time))
-N_4_merge$weather2 <- sapply(N_4_merge$cut_floor.x, function(x) any(x < weather_MSP$End_Time & 
-                                                                      x > weather_MSP$Starting_Time))
-N_4_merge$weather <- ifelse(N_4_merge$weather2==TRUE | N_4_merge$weather1==TRUE,1,0) 
-```
-
-```{r N_4_final}
-N_4_final <- N_4_merge %>% select(DateTime,weather,Crash)
-
-write.csv(N_4_final,'N_4_final.csv',na='Null',row.names = FALSE)
-```
-
-
-
-
-
 
 
 ### N_1 I-94_WestBound MP 230.69 - MP 228.51
@@ -1173,232 +1070,6 @@ N_1_final$VMT_total[N_1_final$VMT_total == 0] <- NA
 N_1_final$VMT_total[N_1_final$VMT_total < 0] <- NA
 write.csv(N_1_final,'N_1_final_rev2.csv',na='Null',row.names = FALSE)
 ```
-
-
-
-
-### N_2 I-94_WestBound MP 228.51 - MP 225.63
-
-Filter both the TT and VMT datasets
-
-```{r N_2}
-N_2_VMT <- VMT_switch(I_94_WB_VMT_melt,228.51,225.63,'15 mins')
-N_2_TT <- TT(I_94_WB_TT_melt,228.51,225.63,'15 mins')
-
-N_2_merge <- merge(seq_15min_2015,N_2_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
-N_2_merge <- merge(N_2_merge,N_2_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
-```
-
-
-Does the 15 minute time bin coincide with any MNCMAT events?
-
-```{r N_2_MNCMAT}
-N_2_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=225.63 &Measure_Round<=228.51 & Direction =='94W') %>% as.data.frame()
-
-N_2_merge$crash1 <- sapply(N_2_merge$DateTime, function(x) any(x < N_2_MNCMAT$EndDateTime & x > N_2_MNCMAT$DateTime))
-N_2_merge$crash2 <- sapply(N_2_merge$lag, function(x) any(x < N_2_MNCMAT$EndDateTime & x > N_2_MNCMAT$DateTime))
-N_2_merge$MNCMAT <- ifelse(N_2_merge$crash1==TRUE | N_2_merge$crash2==TRUE,TRUE,FALSE)
-```
-
-Does the 15 minute time bin coincide with any IRIS events?
-
-```{r N_2_IRIS}
-N_2_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=225.63 &Measure_Round<=228.51 & Direction == ' WB')
-
-##CRASH
-N_2_merge$IRIS_CRASH1 <- sapply(N_2_merge$DateTime, function(x) any(x < N_2_IRIS$Max_DateTime[N_2_IRIS$Descr=='CRASH'] & x > N_2_IRIS$Min_DateTime[N_2_IRIS$Descr=='CRASH']))
-
-N_2_merge$IRIS_CRASH2 <- sapply(N_2_merge$lag, function(x) any(x < N_2_IRIS$Max_DateTime[N_2_IRIS$Descr=='CRASH'] & x > N_2_IRIS$Min_DateTime[N_2_IRIS$Descr=='CRASH']))
-
-N_2_merge$IRIS_CRASH <- ifelse(N_2_merge$IRIS_CRASH1==TRUE | N_2_merge$IRIS_CRASH2==TRUE,TRUE,FALSE) 
-
-###INCIDENT
-N_2_merge$IRIS_INCIDENT1 <- sapply(N_2_merge$DateTime, function(x) any(x < N_2_IRIS$Max_DateTime[N_2_IRIS$Descr=='STALL'|N_2_IRIS$Descr=='HAZARD'] & x > N_2_IRIS$Min_DateTime[N_2_IRIS$Descr=='STALL'|N_2_IRIS$Descr=='HAZARD']))
-
-N_2_merge$IRIS_INCIDENT2 <- sapply(N_2_merge$lag, function(x) any(x < N_2_IRIS$Max_DateTime[N_2_IRIS$Descr=='STALL'|N_2_IRIS$Descr=='HAZARD'] & x > N_2_IRIS$Min_DateTime[N_2_IRIS$Descr=='STALL'|N_2_IRIS$Descr=='HAZARD']))
-
-N_2_merge$INCIDENT <- ifelse(N_2_merge$IRIS_INCIDENT1==TRUE | N_2_merge$IRIS_INCIDENT2==TRUE,1,0) 
-
-##ROADWORK
-N_2_merge$IRIS_ROADWORK1 <- sapply(N_2_merge$DateTime, function(x) any(x < N_2_IRIS$Max_DateTime[N_2_IRIS$Descr=='ROADWORK'] & x > N_2_IRIS$Min_DateTime[N_2_IRIS$Descr=='ROADWORK']))
-
-N_2_merge$IRIS_ROADWORK2 <- sapply(N_2_merge$lag, function(x) any(x < N_2_IRIS$Max_DateTime[N_2_IRIS$Descr=='ROADWORK'] & x > N_2_IRIS$Min_DateTime[N_2_IRIS$Descr=='ROADWORK']))
-
-N_2_merge$ROADWORK <- ifelse(N_2_merge$IRIS_ROADWORK1==TRUE | N_2_merge$IRIS_ROADWORK2==TRUE,1,0)  
-```
-
-```{r N_2 final_crash}
-N_2_merge$Crash <- if_else(N_2_merge$IRIS_CRASH==TRUE|N_2_merge$MNCMAT==TRUE,1,0)
-```
-
-Does the 15 minute time bin coincide with any weather events?
-
-```{r N_2_Weather}
-N_2_merge$weather1 <- sapply(N_2_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
-                                                                   x > weather_MSP$Starting_Time))
-N_2_merge$weather2 <- sapply(N_2_merge$lag, function(x) any(x < weather_MSP$End_Time & 
-                                                                      x > weather_MSP$Starting_Time))
-N_2_merge$weather <- ifelse(N_2_merge$weather2==TRUE | N_2_merge$weather1==TRUE,1,0) 
-```
-
-```{r N_2_final}
-N_2_final <- N_2_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash,INCIDENT,ROADWORK)
-N_2_final$VMT_total[N_2_final$VMT_total == 0] <- NA
-N_2_final$VMT_total[N_2_final$VMT_total < 0] <- NA
-write.csv(N_2_final,'N_2_final_rev3.csv',na='Null',row.names = FALSE)
-```
-
-
-
-
-
-### S_3 I-94_EastBound MP 225.62 - MP 228.52
-
-Filter both the TT and VMT datasets
-
-```{r S_3}
-S_3_VMT <- VMT(I_94_EB_VMT_melt,225.62,228.52,'15 mins')
-S_3_TT <- TT(I_94_EB_TT_melt,225.62,228.52,'15 mins')
-
-S_3_merge <- merge(seq_15min_2015,S_3_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
-S_3_merge <- merge(S_3_merge,S_3_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
-```
-
-
-Does the 15 minute time bin coincide with any MNCMAT events?
-
-```{r S_3_MNCMAT}
-S_3_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=225.62 &Measure_Round<=228.52 & Direction =='94W') %>% as.data.frame()
-
-S_3_merge$crash1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_MNCMAT$EndDateTime & x > S_3_MNCMAT$DateTime))
-S_3_merge$crash2 <- sapply(S_3_merge$lag, function(x) any(x < S_3_MNCMAT$EndDateTime & x > S_3_MNCMAT$DateTime))
-S_3_merge$MNCMAT <- ifelse(S_3_merge$crash1==TRUE | S_3_merge$crash2==TRUE,TRUE,FALSE)
-```
-
-Does the 15 minute time bin coincide with any IRIS events?
-
-```{r S_3_IRIS}
-S_3_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=225.62 &Measure_Round<=228.52 & Direction == ' WB')
-
-##CRASH
-S_3_merge$IRIS_CRASH1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_IRIS$Max_DateTime[S_3_IRIS$Descr=='CRASH'] & x > S_3_IRIS$Min_DateTime[S_3_IRIS$Descr=='CRASH']))
-
-S_3_merge$IRIS_CRASH2 <- sapply(S_3_merge$lag, function(x) any(x < S_3_IRIS$Max_DateTime[S_3_IRIS$Descr=='CRASH'] & x > S_3_IRIS$Min_DateTime[S_3_IRIS$Descr=='CRASH']))
-
-S_3_merge$IRIS_CRASH <- ifelse(S_3_merge$IRIS_CRASH1==TRUE | S_3_merge$IRIS_CRASH2==TRUE,TRUE,FALSE) 
-
-###INCIDENT
-S_3_merge$IRIS_INCIDENT1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_IRIS$Max_DateTime[S_3_IRIS$Descr=='STALL'|S_3_IRIS$Descr=='HAZARD'] & x > S_3_IRIS$Min_DateTime[S_3_IRIS$Descr=='STALL'|S_3_IRIS$Descr=='HAZARD']))
-
-S_3_merge$IRIS_INCIDENT2 <- sapply(S_3_merge$lag, function(x) any(x < S_3_IRIS$Max_DateTime[S_3_IRIS$Descr=='STALL'|S_3_IRIS$Descr=='HAZARD'] & x > S_3_IRIS$Min_DateTime[S_3_IRIS$Descr=='STALL'|S_3_IRIS$Descr=='HAZARD']))
-
-S_3_merge$INCIDENT <- ifelse(S_3_merge$IRIS_INCIDENT1==TRUE | S_3_merge$IRIS_INCIDENT2==TRUE,1,0) 
-
-##ROADWORK
-S_3_merge$IRIS_ROADWORK1 <- sapply(S_3_merge$DateTime, function(x) any(x < S_3_IRIS$Max_DateTime[S_3_IRIS$Descr=='ROADWORK'] & x > S_3_IRIS$Min_DateTime[S_3_IRIS$Descr=='ROADWORK']))
-
-S_3_merge$IRIS_ROADWORK2 <- sapply(S_3_merge$lag, function(x) any(x < S_3_IRIS$Max_DateTime[S_3_IRIS$Descr=='ROADWORK'] & x > S_3_IRIS$Min_DateTime[S_3_IRIS$Descr=='ROADWORK']))
-
-S_3_merge$ROADWORK <- ifelse(S_3_merge$IRIS_ROADWORK1==TRUE | S_3_merge$IRIS_ROADWORK2==TRUE,1,0)  
-```
-
-```{r S_3 final_crash}
-S_3_merge$Crash <- if_else(S_3_merge$IRIS_CRASH==TRUE|S_3_merge$MNCMAT==TRUE,1,0)
-```
-
-Does the 15 minute time bin coincide with any weather events?
-
-```{r S_3_Weather}
-S_3_merge$weather1 <- sapply(S_3_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
-                                                                   x > weather_MSP$Starting_Time))
-S_3_merge$weather2 <- sapply(S_3_merge$lag, function(x) any(x < weather_MSP$End_Time & 
-                                                                      x > weather_MSP$Starting_Time))
-S_3_merge$weather <- ifelse(S_3_merge$weather2==TRUE | S_3_merge$weather1==TRUE,1,0) 
-```
-
-```{r S_3_final}
-S_3_final <- S_3_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash,INCIDENT,ROADWORK)
-S_3_final$VMT_total[S_3_final$VMT_total == 0] <- NA
-S_3_final$VMT_total[S_3_final$VMT_total < 0] <- NA
-write.csv(S_3_final,'S_3_final_rev3.csv',na='Null',row.names = FALSE)
-```
-
-
-
-
-
-### S_4 I-94_EastBound MP 228.52 - MP 230.72
-
-Filter both the TT and VMT datasets
-
-```{r S_4}
-S_4_VMT <- VMT(I_94_EB_VMT_melt,228.52,230.72,'15 mins')
-S_4_TT <- TT(I_94_EB_TT_melt,228.52,230.72,'15 mins')
-
-S_4_merge <- merge(seq_15min_2015,S_4_TT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
-S_4_merge <- merge(S_4_merge,S_4_VMT,by.x="DateTime",by.y="cut_ceiling",all.x=TRUE)
-```
-
-
-
-Does the 15 minute time bin coincide with any MNCMAT events?
-
-```{r S_4_MNCMAT}
-S_4_MNCMAT <- MNCMAT_final %>% filter(Measure_Round>=228.52 &Measure_Round<=230.72 & Direction =='94W') %>% as.data.frame()
-
-S_4_merge$crash1 <- sapply(S_4_merge$DateTime, function(x) any(x < S_4_MNCMAT$EndDateTime & x > S_4_MNCMAT$DateTime))
-S_4_merge$crash2 <- sapply(S_4_merge$lag, function(x) any(x < S_4_MNCMAT$EndDateTime & x > S_4_MNCMAT$DateTime))
-S_4_merge$MNCMAT <- ifelse(S_4_merge$crash1==TRUE | S_4_merge$crash2==TRUE,TRUE,FALSE)
-```
-
-Does the 15 minute time bin coincide with any IRIS events?
-
-```{r S_4_IRIS}
-S_4_IRIS <- IRIS_2015_event %>% filter(Measure_Round >=228.52 &Measure_Round<=230.72 & Direction == ' WB')
-
-##CRASH
-S_4_merge$IRIS_CRASH1 <- sapply(S_4_merge$DateTime, function(x) any(x < S_4_IRIS$Max_DateTime[S_4_IRIS$Descr=='CRASH'] & x > S_4_IRIS$Min_DateTime[S_4_IRIS$Descr=='CRASH']))
-
-S_4_merge$IRIS_CRASH2 <- sapply(S_4_merge$lag, function(x) any(x < S_4_IRIS$Max_DateTime[S_4_IRIS$Descr=='CRASH'] & x > S_4_IRIS$Min_DateTime[S_4_IRIS$Descr=='CRASH']))
-
-S_4_merge$IRIS_CRASH <- ifelse(S_4_merge$IRIS_CRASH1==TRUE | S_4_merge$IRIS_CRASH2==TRUE,TRUE,FALSE) 
-
-###INCIDENT
-S_4_merge$IRIS_INCIDENT1 <- sapply(S_4_merge$DateTime, function(x) any(x < S_4_IRIS$Max_DateTime[S_4_IRIS$Descr=='STALL'|S_4_IRIS$Descr=='HAZARD'] & x > S_4_IRIS$Min_DateTime[S_4_IRIS$Descr=='STALL'|S_4_IRIS$Descr=='HAZARD']))
-
-S_4_merge$IRIS_INCIDENT2 <- sapply(S_4_merge$lag, function(x) any(x < S_4_IRIS$Max_DateTime[S_4_IRIS$Descr=='STALL'|S_4_IRIS$Descr=='HAZARD'] & x > S_4_IRIS$Min_DateTime[S_4_IRIS$Descr=='STALL'|S_4_IRIS$Descr=='HAZARD']))
-
-S_4_merge$INCIDENT <- ifelse(S_4_merge$IRIS_INCIDENT1==TRUE | S_4_merge$IRIS_INCIDENT2==TRUE,1,0) 
-
-##ROADWORK
-S_4_merge$IRIS_ROADWORK1 <- sapply(S_4_merge$DateTime, function(x) any(x < S_4_IRIS$Max_DateTime[S_4_IRIS$Descr=='ROADWORK'] & x > S_4_IRIS$Min_DateTime[S_4_IRIS$Descr=='ROADWORK']))
-
-S_4_merge$IRIS_ROADWORK2 <- sapply(S_4_merge$lag, function(x) any(x < S_4_IRIS$Max_DateTime[S_4_IRIS$Descr=='ROADWORK'] & x > S_4_IRIS$Min_DateTime[S_4_IRIS$Descr=='ROADWORK']))
-
-S_4_merge$ROADWORK <- ifelse(S_4_merge$IRIS_ROADWORK1==TRUE | S_4_merge$IRIS_ROADWORK2==TRUE,1,0)  
-```
-
-```{r S_4 final_crash}
-S_4_merge$Crash <- if_else(S_4_merge$IRIS_CRASH==TRUE|S_4_merge$MNCMAT==TRUE,1,0)
-```
-
-Does the 15 minute time bin coincide with any weather events?
-
-```{r S_4_Weather}
-S_4_merge$weather1 <- sapply(S_4_merge$DateTime, function(x) any(x < weather_MSP$End_Time &
-                                                                   x > weather_MSP$Starting_Time))
-S_4_merge$weather2 <- sapply(S_4_merge$lag, function(x) any(x < weather_MSP$End_Time & 
-                                                                      x > weather_MSP$Starting_Time))
-S_4_merge$weather <- ifelse(S_4_merge$weather2==TRUE | S_4_merge$weather1==TRUE,1,0) 
-```
-
-```{r S_4_final}
-S_4_final <- S_4_merge %>% select(DateTime,VMT_total,TT_mean,weather,Crash,INCIDENT,ROADWORK)
-S_4_final$VMT_total[S_4_final$VMT_total ==0] <- NA
-S_4_final$VMT_total[S_4_final$VMT_total <0] <- NA
-write.csv(S_4_final,'S_4_final_rev2.csv',na='Null',row.names = FALSE)
-```
-
 
 
 
